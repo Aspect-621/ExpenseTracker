@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}Expense Tracker{% endblock %} — Taipei Wallet</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>💰</text></svg>">
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Bootstrap Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --sidebar-width: 240px;
+      --accent: #7c3aed;
+      --accent-light: #a78bfa;
+    }
+    [data-bs-theme="dark"] {
+      --bs-body-bg: #0f0f1a;
+      --bs-body-color: #e2e8f0;
+      --bs-card-bg: #1a1a2e;
+      --bs-border-color: #2d2d4e;
+      --sidebar-bg: #12122a;
+    }
+    [data-bs-theme="light"] {
+      --bs-body-bg: #f0f2f8;
+      --sidebar-bg: #1a1a2e;
+    }
+
+    body { background-color: var(--bs-body-bg); font-family: 'Inter', system-ui, sans-serif; }
+
+    /* Sidebar */
+    .sidebar {
+      position: fixed; top: 0; left: 0; height: 100vh;
+      width: var(--sidebar-width); background: var(--sidebar-bg);
+      z-index: 100; display: flex; flex-direction: column;
+      transition: transform .3s ease; overflow-y: auto;
+      border-right: 1px solid rgba(255,255,255,0.05);
+    }
+    .sidebar-brand {
+      padding: 1.5rem 1.25rem 1rem;
+      font-size: 1.15rem; font-weight: 700;
+      color: var(--accent-light); letter-spacing: .5px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .sidebar-brand span { font-size: 1.4rem; margin-right: .4rem; }
+    .sidebar-nav { padding: .75rem 0; flex: 1; }
+    .sidebar-nav .nav-section {
+      font-size: .65rem; font-weight: 600; color: #64748b;
+      letter-spacing: 1.5px; text-transform: uppercase;
+      padding: .75rem 1.25rem .25rem;
+    }
+    .sidebar-nav .nav-link {
+      padding: .55rem 1.25rem; color: #94a3b8;
+      display: flex; align-items: center; gap: .6rem;
+      border-radius: 0; font-size: .875rem; transition: all .15s;
+    }
+    .sidebar-nav .nav-link:hover, .sidebar-nav .nav-link.active {
+      color: #fff; background: rgba(124,58,237,.25);
+      border-left: 3px solid var(--accent);
+      padding-left: calc(1.25rem - 3px);
+    }
+    .sidebar-nav .nav-link i { font-size: 1rem; width: 20px; text-align: center; }
+    .sidebar-footer {
+      padding: .75rem 1.25rem;
+      border-top: 1px solid rgba(255,255,255,0.05);
+      font-size: .8rem; color: #64748b;
+    }
+    .sidebar-footer .user-name { color: #cbd5e1; font-weight: 500; }
+    .sidebar-footer .role-badge {
+      font-size: .65rem; padding: .15rem .4rem;
+      border-radius: 3px; font-weight: 600; letter-spacing: .5px;
+    }
+
+    /* Main content */
+    .main-content {
+      margin-left: var(--sidebar-width);
+      min-height: 100vh; padding: 1.5rem 2rem;
+      transition: margin .3s ease;
+    }
+    .page-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 1.5rem; padding-bottom: 1rem;
+      border-bottom: 1px solid var(--bs-border-color);
+    }
+    .page-header h1 { font-size: 1.5rem; font-weight: 700; margin: 0; }
+
+    /* Cards */
+    .card { border: 1px solid var(--bs-border-color); border-radius: .75rem; }
+    .stat-card { border-radius: .75rem; padding: 1.25rem; position: relative; overflow: hidden; }
+    .stat-card .stat-icon {
+      font-size: 2rem; opacity: .2; position: absolute;
+      right: 1rem; bottom: .5rem;
+    }
+    .stat-card .stat-value { font-size: 1.6rem; font-weight: 700; }
+    .stat-card .stat-label { font-size: .8rem; opacity: .8; font-weight: 500; }
+
+    /* Table */
+    .table { font-size: .875rem; }
+    .table th { font-weight: 600; font-size: .75rem; text-transform: uppercase; letter-spacing: .5px; color: #94a3b8; }
+
+    /* Badges */
+    .category-badge, .payment-badge {
+      padding: .2rem .55rem; border-radius: 4px;
+      font-size: .75rem; font-weight: 600;
+    }
+
+    /* Amount */
+    .amount-cell { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+    /* Hidden indicator */
+    .hidden-row { opacity: .55; }
+    .hidden-row td:first-child { border-left: 3px solid #dc3545; }
+
+    /* Topbar */
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 1.5rem;
+    }
+
+    /* Dark mode toggle */
+    .theme-toggle {
+      background: none; border: 1px solid rgba(255,255,255,.1);
+      color: inherit; border-radius: 6px; padding: .3rem .6rem;
+      cursor: pointer; transition: all .15s;
+    }
+    .theme-toggle:hover { background: rgba(255,255,255,.05); }
+
+    /* Mobile sidebar toggle */
+    .sidebar-toggle {
+      display: none; background: none; border: none;
+      color: inherit; font-size: 1.4rem; cursor: pointer;
+    }
+
+    @media (max-width: 768px) {
+      .sidebar { transform: translateX(-100%); }
+      .sidebar.open { transform: translateX(0); }
+      .main-content { margin-left: 0; padding: 1rem; }
+      .sidebar-toggle { display: block; }
+      .sidebar-overlay {
+        display: none; position: fixed; inset: 0;
+        background: rgba(0,0,0,.5); z-index: 99;
+      }
+      .sidebar-overlay.show { display: block; }
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+    /* Progress bars */
+    .budget-bar { height: 8px; border-radius: 4px; overflow: hidden; }
+
+    /* Form styling */
+    .form-control, .form-select { border-color: var(--bs-border-color); }
+    .form-control:focus, .form-select:focus { border-color: var(--accent); box-shadow: 0 0 0 .25rem rgba(124,58,237,.25); }
+
+    /* Notification toast */
+    .toast-container { position: fixed; top: 1rem; right: 1rem; z-index: 9999; }
+
+    /* Accent button */
+    .btn-accent { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn-accent:hover { background: #6d28d9; border-color: #6d28d9; color: #fff; }
+  </style>
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+<!-- Sidebar overlay (mobile) -->
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+
+<!-- Sidebar -->
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <span>💰</span> Taipei Wallet
+  </div>
+  <div class="sidebar-nav">
+    <a href="{% url 'dashboard' %}" class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+      <i class="bi bi-grid-1x2-fill"></i> Dashboard
+    </a>
+    <a href="{% url 'expense_list' %}" class="nav-link {% if 'expense' in request.resolver_match.url_name %}active{% endif %}">
+      <i class="bi bi-receipt"></i> Expenses
+    </a>
+    {% if user.is_admin_user or user.permissions.can_view_budget %}
+    <a href="{% url 'budget_list' %}" class="nav-link {% if request.resolver_match.url_name == 'budget_list' %}active{% endif %}">
+      <i class="bi bi-pie-chart-fill"></i> Budget
+    </a>
+    {% endif %}
+
+    {% if user.is_admin_user %}
+    <div class="nav-section">Management</div>
+    <a href="{% url 'expense_create' %}" class="nav-link {% if request.resolver_match.url_name == 'expense_create' %}active{% endif %}">
+      <i class="bi bi-plus-circle-fill"></i> Add Expense
+    </a>
+    <a href="{% url 'categories_list' %}" class="nav-link {% if 'categor' in request.resolver_match.url_name %}active{% endif %}">
+      <i class="bi bi-tags-fill"></i> Categories
+    </a>
+    <a href="{% url 'payment_methods_list' %}" class="nav-link {% if 'payment' in request.resolver_match.url_name %}active{% endif %}">
+      <i class="bi bi-credit-card-fill"></i> Payment Methods
+    </a>
+    <a href="{% url 'recurring_list' %}" class="nav-link {% if 'recurring' in request.resolver_match.url_name %}active{% endif %}">
+      <i class="bi bi-arrow-repeat"></i> Recurring
+    </a>
+    <div class="nav-section">Access</div>
+    <a href="{% url 'members_list' %}" class="nav-link {% if 'member' in request.resolver_match.url_name %}active{% endif %}">
+      <i class="bi bi-people-fill"></i> Members
+    </a>
+    {% endif %}
+  </div>
+  <div class="sidebar-footer">
+    <div class="d-flex align-items-center gap-2 mb-2">
+      <i class="bi bi-person-circle fs-5"></i>
+      <div>
+        <div class="user-name">{{ user.display_name|default:user.username }}</div>
+        <span class="role-badge {% if user.is_admin_user %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
+          {{ user.role|upper }}
+        </span>
+      </div>
+    </div>
+    <a href="{% url 'logout' %}" class="text-danger text-decoration-none small">
+      <i class="bi bi-box-arrow-left"></i> Sign out
+    </a>
+  </div>
+</nav>
+
+<!-- Main content -->
+<main class="main-content">
+  <!-- Topbar -->
+  <div class="topbar">
+    <button class="sidebar-toggle" onclick="toggleSidebar()"><i class="bi bi-list"></i></button>
+    <div class="ms-auto d-flex align-items-center gap-2">
+      <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">
+        <i class="bi bi-moon-stars-fill" id="themeIcon"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- Messages / Alerts -->
+  {% if messages %}
+  <div class="toast-container">
+    {% for message in messages %}
+    <div class="toast show align-items-center border-0
+      {% if message.tags == 'error' %}bg-danger{% elif message.tags == 'success' %}bg-success{% else %}bg-info{% endif %}
+      text-white" role="alert">
+      <div class="d-flex">
+        <div class="toast-body">{{ message }}</div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% block content %}{% endblock %}
+</main>
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+<script>
+  // Dark/Light mode
+  function toggleTheme() {
+    const html = document.documentElement;
+    const current = html.getAttribute('data-bs-theme');
+    const next = current === 'dark' ? 'light' : 'dark';
+    html.setAttribute('data-bs-theme', next);
+    localStorage.setItem('theme', next);
+    document.getElementById('themeIcon').className =
+      next === 'dark' ? 'bi bi-moon-stars-fill' : 'bi bi-sun-fill';
+  }
+
+  // Restore theme
+  const savedTheme = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-bs-theme', savedTheme);
+  document.getElementById('themeIcon').className =
+    savedTheme === 'dark' ? 'bi bi-moon-stars-fill' : 'bi bi-sun-fill';
+
+  // Mobile sidebar
+  function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('open');
+    document.getElementById('sidebarOverlay').classList.toggle('show');
+  }
+
+  // Auto-dismiss toasts after 4s
+  setTimeout(() => {
+    document.querySelectorAll('.toast').forEach(t => {
+      const toast = bootstrap.Toast.getOrCreateInstance(t);
+      toast.hide();
+    });
+  }, 4000);
+</script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>
+<style>
+/* Live balance cards */
+.balance-card {
+  padding: .75rem 1rem; border-radius: .5rem;
+  border: 1px solid rgba(255,255,255,.05);
+}
+.balance-label { font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; opacity: .7; }
+.balance-value { font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+</style>

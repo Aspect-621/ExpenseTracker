@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-{% if expense %}pencil{% else %}plus-circle{% endif %}-fill me-2"></i>{{ title }}</h1>
+  <a href="{% url 'expense_list' %}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Back
+  </a>
+</div>
+
+<!-- Live Balances (mini) -->
+{% if balances %}
+<div class="d-flex flex-wrap gap-2 mb-3">
+  {% for b in balances %}
+  <div class="px-3 py-1 rounded-pill small fw-semibold" style="background:{{ b.pm.color }}20;border:1px solid {{ b.pm.color }}44;color:{{ b.pm.color }}">
+    {{ b.pm.name }}: TWD {{ b.balance|floatformat:0 }}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="row justify-content-center">
+  <div class="col-md-8 col-lg-6">
+    <div class="card">
+      <div class="card-body p-4">
+        <form method="post">
+          {% csrf_token %}
+          <div class="row g-3">
+
+            <!-- Transaction Type — shown first, drives the UI -->
+            <div class="col-12">
+              <label class="form-label fw-semibold small">Transaction Type *</label>
+              <div class="d-flex gap-2 flex-wrap" id="type-buttons">
+                {% for val, label in form.fields.transaction_type.choices %}
+                <label class="type-btn {% if form.transaction_type.value == val or not form.transaction_type.value and val == 'expense' %}active{% endif %}"
+                       data-type="{{ val }}">
+                  <input type="radio" name="transaction_type" value="{{ val }}" class="d-none"
+                         {% if form.transaction_type.value == val or not form.transaction_type.value and val == 'expense' %}checked{% endif %}>
+                  {% if val == 'expense' %}<i class="bi bi-arrow-up-circle me-1 text-danger"></i>Expense
+                  {% elif val == 'income' %}<i class="bi bi-arrow-down-circle me-1 text-success"></i>Income
+                  {% elif val == 'transfer' %}<i class="bi bi-arrow-left-right me-1 text-info"></i>Transfer
+                  {% elif val == 'topup' %}<i class="bi bi-plus-circle me-1 text-warning"></i>Top-up
+                  {% endif %}
+                </label>
+                {% endfor %}
+              </div>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label fw-semibold small">Date *</label>
+              {{ form.date }}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold small">Description *</label>
+              {{ form.name }}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold small">Amount *</label>
+              <div class="input-group">
+                {{ form.currency }}
+                {{ form.amount }}
+              </div>
+              {% if form.amount.errors %}<div class="text-danger small">{{ form.amount.errors }}</div>{% endif %}
+            </div>
+
+            <!-- From Account -->
+            <div class="col-md-6">
+              <label class="form-label fw-semibold small" id="from-label">From Account *</label>
+              {{ form.payment_method }}
+            </div>
+
+            <!-- To Account (only for transfer/topup) -->
+            <div class="col-md-6" id="to-account-row" style="display:none">
+              <label class="form-label fw-semibold small">To Account *</label>
+              {{ form.to_payment_method }}
+              {% if form.to_payment_method.errors %}
+              <div class="text-danger small">{{ form.to_payment_method.errors }}</div>
+              {% endif %}
+            </div>
+
+            <!-- Category (hidden for transfers) -->
+            <div class="col-md-6" id="category-row">
+              <label class="form-label fw-semibold small">Category</label>
+              {{ form.category }}
+            </div>
+
+            <div class="col-12">
+              <label class="form-label fw-semibold small">Notes</label>
+              {{ form.notes }}
+            </div>
+            <div class="col-12">
+              <div class="form-check">
+                {{ form.is_hidden }}
+                <label class="form-check-label small text-danger fw-semibold" for="{{ form.is_hidden.id_for_label }}">
+                  <i class="bi bi-eye-slash me-1"></i>Hide from members
+                </label>
+              </div>
+            </div>
+          </div>
+          <hr class="my-3">
+          <div class="d-flex gap-2 justify-content-end">
+            {% if not expense %}
+            <button type="submit" name="add_another" value="1" class="btn btn-outline-secondary">
+              <i class="bi bi-plus me-1"></i>Save & Add Another
+            </button>
+            {% endif %}
+            <button type="submit" class="btn btn-accent">
+              <i class="bi bi-check-lg me-1"></i>
+              {% if expense %}Update{% else %}Save{% endif %} Transaction
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.type-btn {
+  padding: .45rem .9rem; border-radius: .375rem; cursor: pointer; font-size: .875rem; font-weight: 500;
+  border: 1px solid var(--bs-border-color); color: #94a3b8; transition: all .15s;
+}
+.type-btn:hover { border-color: #7c3aed; color: #fff; background: rgba(124,58,237,.1); }
+.type-btn.active { border-color: #7c3aed; background: rgba(124,58,237,.2); color: #fff; }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function updateFormForType(type) {
+  const toRow       = document.getElementById('to-account-row');
+  const catRow      = document.getElementById('category-row');
+  const fromLabel   = document.getElementById('from-label');
+
+  if (type === 'transfer' || type === 'topup') {
+    toRow.style.display = '';
+    catRow.style.display = 'none';
+    fromLabel.textContent = 'From Account *';
+  } else {
+    toRow.style.display = 'none';
+    catRow.style.display = '';
+    fromLabel.textContent = type === 'income' ? 'Into Account *' : 'From Account *';
+  }
+}
+
+// Type button toggle
+document.querySelectorAll('.type-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    btn.querySelector('input[type=radio]').checked = true;
+    updateFormForType(btn.dataset.type);
+  });
+});
+
+// Init on page load
+const checkedType = document.querySelector('input[name="transaction_type"]:checked');
+if (checkedType) updateFormForType(checkedType.value);
+</script>
+{% endblock %}

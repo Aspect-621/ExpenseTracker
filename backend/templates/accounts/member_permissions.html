@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Permissions: {{ member.username }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-shield-check me-2 text-primary"></i>Permissions: {{ member.display_name|default:member.username }}</h1>
+  <a href="{% url 'members_list' %}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Back to Members
+  </a>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-md-7">
+    <div class="card">
+      <div class="card-body p-4">
+        <form method="post">
+          {% csrf_token %}
+
+          <h6 class="fw-bold mb-3 text-muted text-uppercase small letter-spacing-1">
+            <i class="bi bi-layout-sidebar me-2"></i>Section Access
+          </h6>
+          <div class="row g-3 mb-4">
+            <div class="col-6">
+              <div class="p-3 rounded border {% if perm.can_view_expenses %}border-primary bg-primary bg-opacity-10{% endif %}">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" name="can_view_expenses" id="perm1"
+                         {% if perm.can_view_expenses %}checked{% endif %}>
+                  <label class="form-check-label fw-semibold" for="perm1">
+                    <i class="bi bi-receipt me-1"></i>View Expenses
+                  </label>
+                </div>
+                <div class="small text-muted mt-1">Can see the expenses list</div>
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="p-3 rounded border {% if perm.can_view_dashboard %}border-success bg-success bg-opacity-10{% endif %}">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" name="can_view_dashboard" id="perm2"
+                         {% if perm.can_view_dashboard %}checked{% endif %}>
+                  <label class="form-check-label fw-semibold" for="perm2">
+                    <i class="bi bi-grid me-1"></i>View Dashboard
+                  </label>
+                </div>
+                <div class="small text-muted mt-1">Can see charts & summary</div>
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="p-3 rounded border {% if perm.can_view_budget %}border-warning bg-warning bg-opacity-10{% endif %}">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" name="can_view_budget" id="perm3"
+                         {% if perm.can_view_budget %}checked{% endif %}>
+                  <label class="form-check-label fw-semibold" for="perm3">
+                    <i class="bi bi-pie-chart me-1"></i>View Budget
+                  </label>
+                </div>
+                <div class="small text-muted mt-1">Can see budget limits & usage</div>
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="p-3 rounded border {% if perm.can_filter_search %}border-info bg-info bg-opacity-10{% endif %}">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" name="can_filter_search" id="perm4"
+                         {% if perm.can_filter_search %}checked{% endif %}>
+                  <label class="form-check-label fw-semibold" for="perm4">
+                    <i class="bi bi-search me-1"></i>Search & Filter
+                  </label>
+                </div>
+                <div class="small text-muted mt-1">Can filter/search expenses</div>
+              </div>
+            </div>
+          </div>
+
+          <h6 class="fw-bold mb-3 text-muted text-uppercase small">
+            <i class="bi bi-eye-slash me-2"></i>Hidden Payment Methods
+          </h6>
+          <p class="small text-muted mb-3">
+            Check the payment methods this member <strong class="text-danger">cannot see</strong>.
+            Bank accounts are hidden by default.
+          </p>
+          <div class="row g-2 mb-4">
+            {% for pm in payment_methods %}
+            <div class="col-6">
+              <div class="p-2 rounded border {% if pm.id in hidden_ids %}border-danger bg-danger bg-opacity-10{% endif %}">
+                <div class="form-check">
+                  <input class="form-check-input border-danger" type="checkbox" name="hide_pm_{{ pm.id }}" id="pm_{{ pm.id }}"
+                         {% if pm.id in hidden_ids %}checked{% endif %}>
+                  <label class="form-check-label small" for="pm_{{ pm.id }}">
+                    <span class="payment-badge me-1" style="background:{{ pm.color }}22;color:{{ pm.color }}">
+                      {{ pm.name }}
+                    </span>
+                    {% if pm.is_bank_account %}<span class="badge bg-danger" style="font-size:.6rem">Bank</span>{% endif %}
+                  </label>
+                </div>
+                <div class="small text-muted ps-4">
+                  {% if pm.id in hidden_ids %}Hidden from member{% else %}Visible to member{% endif %}
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+
+          <div class="alert alert-info py-2 small">
+            <i class="bi bi-info-circle me-1"></i>
+            <strong>Note:</strong> When a payment method is hidden, the member will still see the overall balance change
+            — they just won't see which payment method was used or the individual transactions.
+          </div>
+
+          <button type="submit" class="btn btn-accent w-100">
+            <i class="bi bi-check-lg me-1"></i>Save Permissions
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

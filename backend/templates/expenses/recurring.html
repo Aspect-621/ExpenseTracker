@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}Recurring Expenses{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-arrow-repeat me-2 text-primary"></i>Recurring Expenses</h1>
+  <span class="text-muted small">Auto-added monthly in the background</span>
+</div>
+
+<div class="row g-3">
+  <div class="col-md-5">
+    <div class="card">
+      <div class="card-header border-0 pb-0"><h6 class="fw-bold mb-0">Add Recurring Expense</h6></div>
+      <div class="card-body">
+        <form method="post">
+          {% csrf_token %}
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">Description *</label>
+            {{ form.name }}
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">Amount *</label>
+            <div class="input-group">
+              {{ form.currency }}
+              {{ form.amount }}
+            </div>
+          </div>
+          <div class="mb-2 row g-2">
+            <div class="col">
+              <label class="form-label small fw-semibold">Payment Method *</label>
+              {{ form.payment_method }}
+            </div>
+            <div class="col">
+              <label class="form-label small fw-semibold">Category *</label>
+              {{ form.category }}
+            </div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">Day of Month (1–28) *</label>
+            {{ form.day_of_month }}
+            <div class="form-text">Which day each month this gets auto-added.</div>
+          </div>
+          <div class="mb-2 row g-2">
+            <div class="col">
+              <label class="form-label small fw-semibold">Start Date</label>
+              {{ form.start_date }}
+            </div>
+            <div class="col">
+              <label class="form-label small fw-semibold">End Date (optional)</label>
+              {{ form.end_date }}
+            </div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">Notes</label>
+            {{ form.notes }}
+          </div>
+          <div class="mb-3 form-check">
+            {{ form.is_active }}
+            <label class="form-check-label small">Active</label>
+          </div>
+          <button type="submit" class="btn btn-accent w-100">
+            <i class="bi bi-plus-lg me-1"></i>Create Recurring Expense
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-7">
+    <div class="card">
+      <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+          <thead><tr><th>Description</th><th>Amount</th><th>Day</th><th>Method</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            {% for rec in recurring %}
+            <tr>
+              <td>
+                <div class="fw-semibold">{{ rec.name }}</div>
+                <div class="small text-muted">{{ rec.category.name }}{% if rec.notes %} · {{ rec.notes|truncatechars:40 }}{% endif %}</div>
+              </td>
+              <td class="amount-cell">{{ rec.currency }} {{ rec.amount|floatformat:2 }}</td>
+              <td class="small text-muted">Day {{ rec.day_of_month }}</td>
+              <td>
+                <span class="payment-badge" style="background:{{ rec.payment_method.color }}22;color:{{ rec.payment_method.color }}">
+                  {{ rec.payment_method.name }}
+                </span>
+              </td>
+              <td>
+                {% if rec.is_active %}
+                <span class="badge bg-success">Active</span>
+                {% else %}
+                <span class="badge bg-secondary">Inactive</span>
+                {% endif %}
+                {% if rec.last_added %}
+                <div class="small text-muted">Last: {{ rec.last_added|date:"M d, Y" }}</div>
+                {% endif %}
+              </td>
+              <td class="text-nowrap">
+                <a href="{% url 'recurring_edit' rec.pk %}" class="btn btn-sm btn-outline-primary py-0 px-1 me-1">
+                  <i class="bi bi-pencil"></i>
+                </a>
+                <form method="post" action="{% url 'recurring_delete' rec.pk %}" class="d-inline"
+                      onsubmit="return confirm('Delete this recurring expense?')">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-1">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6" class="text-center text-muted py-5">
+              <i class="bi bi-arrow-repeat display-4 d-block mb-2 opacity-25"></i>
+              No recurring expenses yet
+            </td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

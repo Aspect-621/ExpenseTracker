@@ -1,0 +1,278 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-grid-1x2-fill me-2 text-primary"></i>Dashboard</h1>
+  <div class="d-flex align-items-center gap-2">
+    <span class="text-muted small">{{ current_month }}</span>
+    {% if user.is_admin_user %}
+    <button class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteAllModal">
+      <i class="bi bi-trash3 me-1"></i>Delete All Data
+    </button>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Live Rate Widget -->
+{% if live_rate %}
+<div class="alert py-2 mb-3 d-flex align-items-center gap-3 flex-wrap" style="background:rgba(0,48,135,.15);border:1px solid #003087;">
+  <span class="fw-bold small"><i class="bi bi-currency-exchange me-1" style="color:#003087"></i>Live Rate:</span>
+  <span class="fw-bold text-success">&#8369;1 PHP = TWD {{ live_rate }}</span>
+  <span class="text-muted small">|</span>
+  <span class="fw-bold text-info">TWD 1 = &#8369;{{ php_per_twd }}</span>
+  <span class="text-muted small ms-auto"><i class="bi bi-clock me-1"></i>Live</span>
+</div>
+{% endif %}
+
+<!-- Live Balances Bar -->
+<div class="balances-bar mb-4">
+  <div class="row g-2">
+    {% for b in balances %}
+    <div class="col-6 col-md-3">
+      <div class="balance-card" style="border-left:4px solid {{ b.pm.color }};background:{{ b.pm.color }}12;">
+        <div class="balance-label">{{ b.pm.name }}</div>
+        <div class="balance-value {% if b.balance < 0 %}text-danger{% else %}text-success{% endif %}">
+          {% if b.pm.currency == "PHP" %}&#8369;{% else %}{{ b.pm.currency }} {% endif %}{{ b.balance|floatformat:2 }}
+        </div>
+        {% if b.pm.currency == "PHP" and live_rate %}
+        <div class="small text-muted">≈ TWD {{ b.balance|floatformat:0 }}</div>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Stat Cards -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="stat-card bg-danger bg-opacity-10 border border-danger border-opacity-25">
+      <div class="stat-label text-danger">Spent This Month</div>
+      <div class="stat-value">{{ currency }} {{ total_this_month|floatformat:0 }}</div>
+      <i class="bi bi-arrow-up-circle stat-icon text-danger"></i>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card bg-success bg-opacity-10 border border-success border-opacity-25">
+      <div class="stat-label text-success">Income This Month</div>
+      <div class="stat-value">{{ currency }} {{ total_income|floatformat:0 }}</div>
+      <i class="bi bi-arrow-down-circle stat-icon text-success"></i>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card bg-secondary bg-opacity-10 border border-secondary border-opacity-25">
+      <div class="stat-label text-secondary">Spent Last Month</div>
+      <div class="stat-value">{{ currency }} {{ total_last_month|floatformat:0 }}</div>
+      <i class="bi bi-calendar stat-icon"></i>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card bg-primary bg-opacity-10 border border-primary border-opacity-25">
+      <div class="stat-label text-primary">Net This Month</div>
+      <div class="stat-value {% if total_income > total_this_month %}text-success{% else %}text-danger{% endif %}">
+        {{ currency }} {{ net_this_month|floatformat:0 }}
+      </div>
+      <i class="bi bi-graph-up stat-icon"></i>
+    </div>
+  </div>
+</div>
+
+<!-- Charts -->
+<div class="row g-3 mb-4">
+  <div class="col-md-7">
+    <div class="card h-100">
+      <div class="card-header border-0 pb-0">
+        <h6 class="mb-0 fw-bold"><i class="bi bi-graph-up me-2 text-primary"></i>6-Month Spending Trend</h6>
+      </div>
+      <div class="card-body"><canvas id="trendChart" height="100"></canvas></div>
+    </div>
+  </div>
+  <div class="col-md-5">
+    <div class="card h-100">
+      <div class="card-header border-0 pb-0">
+        <h6 class="mb-0 fw-bold"><i class="bi bi-pie-chart me-2 text-warning"></i>This Month by Category</h6>
+      </div>
+      <div class="card-body d-flex align-items-center justify-content-center">
+        {% if by_category %}
+        <canvas id="categoryChart" height="160"></canvas>
+        {% else %}
+        <div class="text-muted text-center py-4">
+          <i class="bi bi-inbox display-4 d-block mb-2 opacity-25"></i>No expenses this month
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Budget + Payment -->
+<div class="row g-3 mb-4">
+  {% if budgets %}
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-header border-0 pb-0">
+        <h6 class="mb-0 fw-bold"><i class="bi bi-pie-chart-fill me-2 text-info"></i>Budget Status</h6>
+      </div>
+      <div class="card-body">
+        {% for item in budgets %}
+        <div class="mb-3">
+          <div class="d-flex justify-content-between mb-1">
+            <span class="small fw-semibold">{{ item.category.name }}</span>
+            <span class="small text-muted">{{ item.currency }} {{ item.get_spent|floatformat:0 }} / {{ item.amount|floatformat:0 }}</span>
+          </div>
+          <div class="progress" style="height:8px;border-radius:4px;">
+            <div class="progress-bar bg-{{ item.status }}" style="width:{{ item.percentage }}%"></div>
+          </div>
+        </div>
+        {% endfor %}
+        <a href="{% url 'budget_list' %}" class="btn btn-outline-secondary btn-sm w-100 mt-1">Manage Budgets</a>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  <div class="{% if budgets %}col-md-6{% else %}col-12{% endif %}">
+    <div class="card h-100">
+      <div class="card-header border-0 pb-0">
+        <h6 class="mb-0 fw-bold"><i class="bi bi-credit-card-fill me-2 text-success"></i>Spending by Payment Method</h6>
+      </div>
+      <div class="card-body">
+        {% for pm in by_payment %}
+        <div class="d-flex align-items-center justify-content-between mb-2 p-2 rounded"
+             style="background:{{ pm.payment_method__color }}18;border-left:3px solid {{ pm.payment_method__color }}">
+          <span class="small fw-semibold">{{ pm.payment_method__name }}</span>
+          <span class="small fw-bold">{{ currency }} {{ pm.total|floatformat:0 }}</span>
+        </div>
+        {% empty %}
+        <p class="text-muted small text-center py-3">No spending data this month</p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Recent Transactions -->
+<div class="card">
+  <div class="card-header border-0 pb-0 d-flex justify-content-between align-items-center">
+    <h6 class="mb-0 fw-bold"><i class="bi bi-clock-history me-2 text-secondary"></i>Recent Transactions</h6>
+    <a href="{% url 'expense_list' %}" class="btn btn-sm btn-outline-secondary">View All</a>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead><tr>
+          <th>Date</th><th>Description</th><th>Type</th><th>Category</th><th>Account</th>
+          <th class="text-end">Amount</th>
+          {% if user.is_admin_user %}<th></th>{% endif %}
+        </tr></thead>
+        <tbody>
+          {% for t in recent %}
+          <tr {% if t.is_hidden %}class="hidden-row"{% endif %}>
+            <td class="text-muted small text-nowrap">{{ t.date|date:"M d" }}</td>
+            <td>
+              {{ t.name }}
+              {% if t.is_hidden %}<span class="badge bg-danger ms-1" style="font-size:.65rem">hidden</span>{% endif %}
+              {% if t.is_recurring_instance %}<span class="badge bg-info ms-1" style="font-size:.65rem">recurring</span>{% endif %}
+            </td>
+            <td><span class="badge bg-{{ t.type_badge_color }}">{{ t.get_transaction_type_display }}</span></td>
+            <td>
+              {% if t.category %}
+              <span class="category-badge" style="background:{{ t.category.color }}22;color:{{ t.category.color }}">
+                {{ t.category.name }}
+              </span>
+              {% elif t.to_payment_method %}
+              <span class="text-muted small">→ {{ t.to_payment_method.name }}</span>
+              {% endif %}
+            </td>
+            <td>
+              <span class="payment-badge" style="background:{{ t.payment_method.color }}22;color:{{ t.payment_method.color }}">
+                {{ t.payment_method.name }}
+              </span>
+            </td>
+            <td class="text-end amount-cell text-nowrap {% if t.transaction_type == 'income' %}text-success{% elif t.transaction_type == 'expense' %}text-danger{% else %}text-info{% endif %}">
+              {% if t.transaction_type == 'income' %}+{% elif t.transaction_type == 'expense' %}-{% endif %}
+              {{ t.currency }} {{ t.amount|floatformat:2 }}
+            </td>
+            {% if user.is_admin_user %}
+            <td>
+              <a href="{% url 'expense_edit' t.pk %}" class="btn btn-sm btn-outline-secondary py-0 px-1">
+                <i class="bi bi-pencil"></i>
+              </a>
+            </td>
+            {% endif %}
+          </tr>
+          {% empty %}
+          <tr><td colspan="7" class="text-center text-muted py-4">No transactions yet</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Delete All Data Modal -->
+{% if user.is_admin_user %}
+<div class="modal fade" id="deleteAllModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content border-danger">
+      <div class="modal-header border-0">
+        <h6 class="modal-title text-danger fw-bold">
+          <i class="bi bi-exclamation-triangle-fill me-2"></i>Delete ALL Data
+        </h6>
+      </div>
+      <div class="modal-body">
+        <p class="small text-danger fw-semibold mb-3">This permanently deletes ALL transactions and cannot be undone!</p>
+        <form method="post" action="{% url 'delete_all_data' %}">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Enter your password to confirm:</label>
+            <input type="password" name="password" class="form-control" placeholder="Your admin password" required>
+          </div>
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-secondary flex-grow-1" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-danger flex-grow-1">Delete Everything</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+const gridColor = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)';
+Chart.defaults.color = isDark ? '#94a3b8' : '#64748b';
+const trendData = {{ monthly_trend|safe }};
+new Chart(document.getElementById('trendChart'), {
+  type: 'line',
+  data: {
+    labels: trendData.map(d => d.month),
+    datasets: [{
+      label: 'Spent', data: trendData.map(d => d.total),
+      borderColor: '#7c3aed', backgroundColor: 'rgba(124,58,237,0.1)',
+      borderWidth: 2, fill: true, tension: 0.4,
+      pointBackgroundColor: '#7c3aed', pointRadius: 4,
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { display: false } },
+    scales: { x: { grid: { color: gridColor } }, y: { grid: { color: gridColor }, beginAtZero: true } }
+  }
+});
+{% if by_category %}
+const catData = [{% for c in by_category %}{ name: '{{ c.category__name }}', total: {{ c.total }}, color: '{{ c.category__color }}' },{% endfor %}];
+new Chart(document.getElementById('categoryChart'), {
+  type: 'doughnut',
+  data: {
+    labels: catData.map(d => d.name),
+    datasets: [{ data: catData.map(d => d.total), backgroundColor: catData.map(d => d.color + 'cc'), borderColor: catData.map(d => d.color), borderWidth: 2 }]
+  },
+  options: { responsive: true, cutout: '65%', plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 12, font: { size: 11 } } } } }
+});
+{% endif %}
+</script>
+{% endblock %}

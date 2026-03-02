@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block title %}PH Withdrawal{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-bank me-2" style="color:#003087"></i>PH ATM Withdrawal</h1>
+  <a href="{% url 'expense_list' %}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Back
+  </a>
+</div>
+
+{% if messages %}
+{% for msg in messages %}
+<div class="alert alert-{% if msg.tags == 'error' %}danger{% else %}success{% endif %} alert-dismissible">
+  {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endfor %}
+{% endif %}
+
+<!-- Live Rate Card -->
+<div class="card mb-4" style="border-left:4px solid #003087;">
+  <div class="card-body py-3">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+      <div>
+        <div class="small text-muted fw-semibold text-uppercase mb-1">Live Exchange Rate</div>
+        {% if live_rate %}
+        <div class="fs-4 fw-bold">&#8369;1 PHP = <span class="text-success">TWD {{ live_rate }}</span></div>
+        <div class="small text-muted">TWD 1 = &#8369;{{ live_rate }}</div>
+        {% else %}
+        <div class="text-warning fw-semibold"><i class="bi bi-wifi-off me-1"></i>Live rate unavailable — enter manually</div>
+        {% endif %}
+      </div>
+      <div class="text-muted small"><i class="bi bi-clock me-1"></i>Refreshes on page load</div>
+    </div>
+  </div>
+</div>
+
+<!-- PH Account Balances -->
+<div class="row g-2 mb-4">
+  {% for b in balances %}{% if b.pm.currency == 'PHP' %}
+  <div class="col-6 col-md-3">
+    <div class="balance-card" style="border-left:4px solid {{ b.pm.color }};background:{{ b.pm.color }}12;">
+      <div class="balance-label">{{ b.pm.name }}</div>
+      <div class="balance-value" style="color:{{ b.pm.color }}">&#8369;{{ b.balance|floatformat:2 }}</div>
+      {% if live_rate %}<div class="small text-muted">≈ TWD {{ b.balance|floatformat:0 }}</div>{% endif %}
+    </div>
+  </div>
+  {% endif %}{% endfor %}
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-md-7 col-lg-5">
+    <div class="card">
+      <div class="card-header border-0">
+        <h6 class="fw-bold mb-0"><i class="bi bi-cash-coin me-2 text-success"></i>Log ATM Withdrawal</h6>
+        <div class="small text-muted mt-1">Creates 2 automatic logs: PH bank deducted + Cash (TWD) increased</div>
+      </div>
+      <div class="card-body">
+        <form method="post">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">PH Account *</label>
+            <select name="ph_account" class="form-select" id="ph_account" required>
+              <option value="">— Select account —</option>
+              {% for acc in php_accounts %}
+              <option value="{{ acc.pk }}">{{ acc.name }} (&#8369;{{ acc.get_balance|floatformat:2 }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">PHP Amount *</label>
+            <div class="input-group">
+              <span class="input-group-text fw-bold">&#8369;</span>
+              <input type="number" name="php_amount" id="php_amount" class="form-control"
+                     step="0.01" min="0.01" placeholder="0.00" required>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small d-flex justify-content-between align-items-center">
+              <span>Exchange Rate (&#8369;1 = ? TWD) *</span>
+              {% if live_rate %}
+              <button type="button" class="btn btn-link btn-sm p-0 text-success"
+                      onclick="document.getElementById('rate').value='{{ live_rate }}';updatePreview()">
+                Use live ({{ live_rate }})
+              </button>
+              {% endif %}
+            </label>
+            <input type="number" name="exchange_rate" id="rate" class="form-control"
+                   step="0.0001" min="0.0001"
+                   value="{{ live_rate|default:'' }}"
+                   placeholder="{{ live_rate|default:'0.5600' }}" required>
+          </div>
+
+          <div class="alert alert-info py-2 mb-3" id="preview" style="display:none">
+            <i class="bi bi-calculator me-1"></i>
+            You will receive: <strong id="twd_preview">TWD 0</strong>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Date *</label>
+            <input type="date" name="date" class="form-control" value="{{ today }}" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Notes</label>
+            <textarea name="notes" class="form-control" rows="2" placeholder="Optional..."></textarea>
+          </div>
+          <button type="submit" class="btn btn-accent w-100 btn-lg">
+            <i class="bi bi-check-circle me-2"></i>Log Withdrawal
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <div class="card mt-3" style="border:1px dashed var(--bs-border-color)">
+      <div class="card-body py-3">
+        <div class="small fw-bold text-muted mb-2">WHAT GETS LOGGED AUTOMATICALLY:</div>
+        <div class="d-flex gap-2 align-items-center mb-2">
+          <span class="badge bg-danger">Log 1</span>
+          <span class="small" id="log1_preview">PH account — PHP amount deducted</span>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+          <span class="badge bg-success">Log 2</span>
+          <span class="small" id="log2_preview">Cash — TWD amount added</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function updatePreview() {
+  const php  = parseFloat(document.getElementById('php_amount').value) || 0;
+  const rate = parseFloat(document.getElementById('rate').value) || 0;
+  const twd  = (php * rate).toFixed(2);
+  const acc  = document.getElementById('ph_account');
+  const accName = acc.options[acc.selectedIndex]?.text?.split(' (')[0] || 'PH Account';
+  if (php > 0 && rate > 0) {
+    document.getElementById('preview').style.display = '';
+    document.getElementById('twd_preview').textContent = `TWD ${parseFloat(twd).toLocaleString()}`;
+    document.getElementById('log1_preview').textContent = `${accName} — ₱${php.toLocaleString()} deducted`;
+    document.getElementById('log2_preview').textContent = `Cash — TWD ${parseFloat(twd).toLocaleString()} added`;
+  } else {
+    document.getElementById('preview').style.display = 'none';
+  }
+}
+document.getElementById('php_amount').addEventListener('input', updatePreview);
+document.getElementById('rate').addEventListener('input', updatePreview);
+document.getElementById('ph_account').addEventListener('change', updatePreview);
+</script>
+{% endblock %}

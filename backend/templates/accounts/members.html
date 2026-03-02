@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Members{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-people-fill me-2 text-purple"></i>Members</h1>
+  <a href="{% url 'member_create' %}" class="btn btn-sm btn-accent">
+    <i class="bi bi-person-plus me-1"></i>Add Member
+  </a>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0">
+      <thead><tr><th>Username</th><th>Display Name</th><th>Status</th><th>Permissions</th><th>Actions</th></tr></thead>
+      <tbody>
+        {% for member in members %}
+        <tr>
+          <td class="fw-semibold">{{ member.username }}</td>
+          <td>{{ member.display_name|default:"—" }}</td>
+          <td>
+            <div class="form-check form-switch mb-0">
+              <input class="form-check-input" type="checkbox" {% if member.is_active %}checked{% endif %}
+                     onchange="toggleMember({{ member.pk }}, this)" style="cursor:pointer">
+              <label class="form-check-label small {% if member.is_active %}text-success{% else %}text-muted{% endif %}">
+                {% if member.is_active %}Active{% else %}Disabled{% endif %}
+              </label>
+            </div>
+          </td>
+          <td>
+            {% with p=member.permissions %}
+            {% if p %}
+            <div class="d-flex flex-wrap gap-1">
+              {% if p.can_view_expenses %}<span class="badge bg-primary bg-opacity-75" style="font-size:.65rem">Expenses</span>{% endif %}
+              {% if p.can_view_dashboard %}<span class="badge bg-success bg-opacity-75" style="font-size:.65rem">Dashboard</span>{% endif %}
+              {% if p.can_view_budget %}<span class="badge bg-warning text-dark bg-opacity-75" style="font-size:.65rem">Budget</span>{% endif %}
+              {% if p.can_filter_search %}<span class="badge bg-info bg-opacity-75" style="font-size:.65rem">Search</span>{% endif %}
+            </div>
+            {% else %}
+            <span class="text-muted small">No permissions set</span>
+            {% endif %}
+            {% endwith %}
+          </td>
+          <td class="text-nowrap">
+            <a href="{% url 'member_permissions' member.pk %}" class="btn btn-sm btn-outline-primary py-0 px-1 me-1">
+              <i class="bi bi-shield-check"></i> Permissions
+            </a>
+            <form method="post" action="{% url 'member_delete' member.pk %}" class="d-inline"
+                  onsubmit="return confirm('Delete member \'{{ member.username }}\'?')">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-1">
+                <i class="bi bi-trash"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="text-center text-muted py-5">
+          <i class="bi bi-people display-3 d-block mb-2 opacity-25"></i>
+          No members yet. <a href="{% url 'member_create' %}">Add one!</a>
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleMember(pk, checkbox) {
+  fetch(`/accounts/members/${pk}/toggle/`, {
+    method: 'POST',
+    headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+  })
+  .then(r => r.json())
+  .then(d => {
+    const label = checkbox.nextElementSibling;
+    label.textContent = d.active ? 'Active' : 'Disabled';
+    label.className = `form-check-label small ${d.active ? 'text-success' : 'text-muted'}`;
+  });
+}
+</script>
+{% endblock %}

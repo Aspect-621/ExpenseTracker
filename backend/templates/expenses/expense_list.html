@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+{% block title %}Transactions{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-receipt me-2 text-success"></i>Transactions</h1>
+  <div class="d-flex gap-2">
+    {% if user.is_admin_user %}
+    <a href="{% url 'expense_export' %}?{{ request.GET.urlencode }}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-download me-1"></i>Export Excel
+    </a>
+    <a href="{% url 'expense_create' %}" class="btn btn-sm btn-accent">
+      <i class="bi bi-plus-lg me-1"></i>Add
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Live Balances (mini bar) -->
+<div class="d-flex flex-wrap gap-2 mb-3">
+  {% for b in balances %}
+  <div class="px-3 py-1 rounded-pill small fw-semibold"
+       style="background:{{ b.pm.color }}20;border:1px solid {{ b.pm.color }}44;color:{{ b.pm.color }}">
+    {{ b.pm.name }}: TWD {{ b.balance|floatformat:0 }}
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Filter Bar -->
+{% if user.is_admin_user or user.permissions.can_filter_search %}
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-12 col-md-2">
+        <input type="text" name="search" value="{{ search }}" class="form-control form-control-sm" placeholder="🔍 Search...">
+      </div>
+      <div class="col-6 col-md-2">
+        <select name="type" class="form-select form-select-sm">
+          <option value="">All Types</option>
+          {% for val, label in txn_types %}
+          <option value="{{ val }}" {% if selected_type == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <select name="category" class="form-select form-select-sm">
+          <option value="">All Categories</option>
+          {% for cat in categories %}
+          <option value="{{ cat.id }}" {% if selected_category == cat.id|stringformat:"s" %}selected{% endif %}>{{ cat.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <select name="payment" class="form-select form-select-sm">
+          <option value="">All Accounts</option>
+          {% for pm in payment_methods %}
+          <option value="{{ pm.id }}" {% if selected_payment == pm.id|stringformat:"s" %}selected{% endif %}>{{ pm.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <input type="date" name="date_from" value="{{ date_from }}" class="form-control form-control-sm" placeholder="From">
+      </div>
+      <div class="col-6 col-md-1">
+        <input type="date" name="date_to" value="{{ date_to }}" class="form-control form-control-sm" placeholder="To">
+      </div>
+      <div class="col-6 col-md-1 d-flex gap-1">
+        <button type="submit" class="btn btn-sm btn-accent flex-grow-1">Go</button>
+        <a href="{% url 'expense_list' %}" class="btn btn-sm btn-outline-secondary">✕</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<!-- Summary row -->
+<div class="d-flex justify-content-between align-items-center mb-2 px-1 flex-wrap gap-2">
+  <span class="small text-muted">{{ count }} transaction{{ count|pluralize }}</span>
+  <div class="d-flex gap-3">
+    <span class="small">Expenses: <strong class="text-danger">-TWD {{ totals.expenses|floatformat:2 }}</strong></span>
+    <span class="small">Income: <strong class="text-success">+TWD {{ totals.income|floatformat:2 }}</strong></span>
+  </div>
+</div>
+
+<!-- Table -->
+<div class="card">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead><tr>
+          <th><a href="?sort={% if sort == '-date' %}date{% else %}-date{% endif %}&{{ request.GET.urlencode }}" class="text-muted text-decoration-none">Date {% if sort == 'date' %}↑{% elif sort == '-date' %}↓{% endif %}</a></th>
+          <th>Description</th>
+          <th>Type</th>
+          <th>Account</th>
+          <th>Category</th>
+          <th class="text-end"><a href="?sort={% if sort == '-amount' %}amount{% else %}-amount{% endif %}&{{ request.GET.urlencode }}" class="text-muted text-decoration-none">Amount {% if sort == 'amount' %}↑{% elif sort == '-amount' %}↓{% endif %}</a></th>
+          {% if user.is_admin_user %}<th class="text-center">Actions</th>{% endif %}
+        </tr></thead>
+        <tbody>
+          {% for t in expenses %}
+          <tr {% if t.is_hidden %}class="hidden-row"{% endif %}>
+            <td class="text-muted small text-nowrap">{{ t.date|date:"Y-m-d" }}</td>
+            <td>
+              <div class="fw-semibold">{{ t.name }}</div>
+              {% if t.notes %}<div class="small text-muted">{{ t.notes|truncatechars:50 }}</div>{% endif %}
+              {% if t.is_hidden %}<span class="badge bg-danger" style="font-size:.65rem"><i class="bi bi-eye-slash"></i> hidden</span>{% endif %}
+              {% if t.is_recurring_instance %}<span class="badge bg-info" style="font-size:.65rem"><i class="bi bi-arrow-repeat"></i> recurring</span>{% endif %}
+            </td>
+            <td>
+              <span class="badge bg-{{ t.type_badge_color }}">{{ t.get_transaction_type_display }}</span>
+            </td>
+            <td>
+              <div>
+                <span class="payment-badge" style="background:{{ t.payment_method.color }}22;color:{{ t.payment_method.color }}">
+                  {{ t.payment_method.name }}
+                </span>
+              </div>
+              {% if t.to_payment_method %}
+              <div class="small text-muted mt-1">→ <span class="payment-badge" style="background:{{ t.to_payment_method.color }}22;color:{{ t.to_payment_method.color }}">{{ t.to_payment_method.name }}</span></div>
+              {% endif %}
+            </td>
+            <td>
+              {% if t.category %}
+              <span class="category-badge" style="background:{{ t.category.color }}22;color:{{ t.category.color }}">
+                {{ t.category.name }}
+              </span>
+              {% else %}—{% endif %}
+            </td>
+            <td class="text-end amount-cell text-nowrap {% if t.transaction_type == 'income' %}text-success{% elif t.transaction_type == 'expense' %}text-danger{% else %}text-info{% endif %}">
+              {% if t.transaction_type == 'income' %}+{% elif t.transaction_type == 'expense' %}-{% endif %}
+              {{ t.currency }} {{ t.amount|floatformat:2 }}
+            </td>
+            {% if user.is_admin_user %}
+            <td class="text-center text-nowrap">
+              <button class="btn btn-sm btn-outline-secondary py-0 px-1 me-1"
+                      onclick="toggleHidden({{ t.pk }}, this)"
+                      title="{% if t.is_hidden %}Show{% else %}Hide{% endif %} from members">
+                <i class="bi {% if t.is_hidden %}bi-eye{% else %}bi-eye-slash{% endif %}"></i>
+              </button>
+              <a href="{% url 'expense_edit' t.pk %}" class="btn btn-sm btn-outline-primary py-0 px-1 me-1">
+                <i class="bi bi-pencil"></i>
+              </a>
+              <button class="btn btn-sm btn-outline-danger py-0 px-1"
+                      onclick="confirmDelete({{ t.pk }}, '{{ t.name|escapejs }}')">
+                <i class="bi bi-trash"></i>
+              </button>
+            </td>
+            {% endif %}
+          </tr>
+          {% empty %}
+          <tr><td colspan="7" class="text-center py-5 text-muted">
+            <i class="bi bi-inbox display-4 d-block mb-2 opacity-25"></i>
+            No transactions found. {% if user.is_admin_user %}<a href="{% url 'expense_create' %}">Add one!</a>{% endif %}
+          </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Pagination -->
+{% if expenses.has_other_pages %}
+<nav class="mt-3">
+  <ul class="pagination pagination-sm justify-content-center">
+    {% if expenses.has_previous %}<li class="page-item"><a class="page-link" href="?page={{ expenses.previous_page_number }}&{{ request.GET.urlencode }}">‹</a></li>{% endif %}
+    {% for num in expenses.paginator.page_range %}
+    <li class="page-item {% if num == expenses.number %}active{% endif %}">
+      <a class="page-link" href="?page={{ num }}&{{ request.GET.urlencode }}">{{ num }}</a>
+    </li>
+    {% endfor %}
+    {% if expenses.has_next %}<li class="page-item"><a class="page-link" href="?page={{ expenses.next_page_number }}&{{ request.GET.urlencode }}">›</a></li>{% endif %}
+  </ul>
+</nav>
+{% endif %}
+
+<!-- Delete Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header border-0"><h6 class="modal-title text-danger"><i class="bi bi-exclamation-triangle me-2"></i>Delete</h6></div>
+      <div class="modal-body small" id="deleteModalBody"></div>
+      <div class="modal-footer border-0 pt-0">
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <form id="deleteForm" method="post">{% csrf_token %}
+          <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function confirmDelete(pk, name) {
+  document.getElementById('deleteModalBody').textContent = `Delete "${name}"? This cannot be undone.`;
+  document.getElementById('deleteForm').action = `/expenses/${pk}/delete/`;
+  new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
+function toggleHidden(pk, btn) {
+  fetch(`/expenses/${pk}/toggle-hidden/`, {
+    method: 'POST',
+    headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+  }).then(r => r.json()).then(data => {
+    const row = btn.closest('tr');
+    const icon = btn.querySelector('i');
+    if (data.is_hidden) {
+      row.classList.add('hidden-row'); icon.className = 'bi bi-eye'; btn.title = 'Show';
+    } else {
+      row.classList.remove('hidden-row'); icon.className = 'bi bi-eye-slash'; btn.title = 'Hide';
+    }
+  });
+}
+</script>
+{% endblock %}
