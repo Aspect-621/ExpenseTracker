@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="page-header">
-  <h1><i class="bi bi-bank2 me-2" style="color:#34d399"></i>TW ATM Withdrawal</h1>
+  <h1><i class="bi bi-bank2 me-2" style="color:#0d6efd"></i>TW ATM Withdrawal</h1>
   <a href="{% url 'expense_list' %}" class="btn btn-sm btn-outline-secondary">
     <i class="bi bi-arrow-left me-1"></i>Back
   </a>
@@ -17,276 +17,131 @@
 {% endfor %}
 {% endif %}
 
-<!-- Live Rate Card -->
-<div class="card mb-4" style="border-left:4px solid #34d399;">
-  <div class="card-body py-3">
-    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-      <div>
-        <div class="small text-muted fw-semibold text-uppercase mb-1">Live Exchange Rate</div>
-        {% if live_rate %}
-        <div class="fs-4 fw-bold">TWD 1 = <span class="text-warning">&#8369;{{ php_per_twd }}</span></div>
-        <div class="small text-muted">&#8369;1 PHP = TWD {{ live_rate }}</div>
-        {% else %}
-        <div class="text-warning fw-semibold"><i class="bi bi-wifi-off me-1"></i>Live rate unavailable</div>
-        {% endif %}
-      </div>
-      <div class="text-muted small"><i class="bi bi-clock me-1"></i>Refreshes on page load</div>
-    </div>
-  </div>
-</div>
-
-<!-- Balances -->
+<!-- TWD Account Balances -->
 <div class="row g-2 mb-4">
-  {% for b in balances %}
+  {% for b in balances %}{% if b.pm.currency == 'TWD' %}
   <div class="col-6 col-md-3">
     <div class="balance-card" style="border-left:4px solid {{ b.pm.color }};background:{{ b.pm.color }}12;">
       <div class="balance-label">{{ b.pm.name }}</div>
-      <div class="balance-value" style="color:{{ b.pm.color }}">
-        {% if b.pm.currency == 'PHP' %}&#8369;{% else %}{{ b.pm.currency }} {% endif %}{{ b.balance|floatformat:2 }}
-      </div>
+      <div class="balance-value" style="color:{{ b.pm.color }}">TWD {{ b.balance|floatformat:2 }}</div>
     </div>
   </div>
-  {% endfor %}
+  {% endif %}{% endfor %}
 </div>
 
 <div class="row justify-content-center">
   <div class="col-md-7 col-lg-5">
-
-    <!-- Mode Tabs -->
-    <div class="d-flex gap-2 mb-3">
-      <button type="button" id="btn-convert" onclick="setMode('convert')"
-              class="btn flex-grow-1 fw-semibold" style="background:#34d399;border-color:#34d399;color:#000">
-        <i class="bi bi-arrow-left-right me-1"></i>Cross-Currency
-      </button>
-      <button type="button" id="btn-same" onclick="setMode('same')"
-              class="btn btn-outline-success flex-grow-1 fw-semibold">
-        <i class="bi bi-arrow-right me-1"></i>Same Currency
-      </button>
-    </div>
-
     <div class="card">
       <div class="card-header border-0">
-        <h6 class="fw-bold mb-0">
-          <i class="bi bi-cash-coin me-2" style="color:#34d399"></i>
-          <span id="form-title">TWD → PHP Withdrawal</span>
-        </h6>
-        <div class="small text-muted mt-1" id="form-subtitle">Logs as 1 transfer: TW bank deducted, PHP received</div>
+        <h6 class="fw-bold mb-0"><i class="bi bi-cash-coin me-2 text-primary"></i>Log TWD ATM Withdrawal</h6>
+        <div class="small text-muted mt-1">
+          Creates 2 automatic logs: bank account deducted + destination account credited
+        </div>
       </div>
       <div class="card-body">
         <form method="post">
           {% csrf_token %}
-          <input type="hidden" name="mode" id="mode-input" value="convert">
 
           <div class="mb-3">
-            <label class="form-label fw-semibold small">From Account *</label>
-            <select name="from_account" id="from_account" class="form-select" required>
-              <option value="">— Select source —</option>
-              <optgroup label="TWD Accounts">
-                {% for acc in twd_accounts %}
-                <option value="{{ acc.pk }}" data-currency="TWD">{{ acc.name }} (TWD {{ acc.get_balance|floatformat:2 }})</option>
-                {% endfor %}
-              </optgroup>
-              <optgroup label="PHP Accounts">
-                {% for acc in php_accounts %}
-                <option value="{{ acc.pk }}" data-currency="PHP">{{ acc.name }} (&#8369;{{ acc.get_balance|floatformat:2 }})</option>
-                {% endfor %}
-              </optgroup>
+            <label class="form-label fw-semibold small">Source Bank Account *</label>
+            <select name="source_account" class="form-select" id="source_account" required>
+              <option value="">— Select bank account —</option>
+              {% for acc in twd_bank_accounts %}
+              <option value="{{ acc.pk }}">{{ acc.name }} (TWD {{ acc.get_balance|floatformat:2 }})</option>
+              {% endfor %}
             </select>
+            <div class="form-text">Only bank accounts are listed as source.</div>
           </div>
 
           <div class="mb-3">
-            <label class="form-label fw-semibold small">To Account *</label>
-            <select name="to_account" id="to_account" class="form-select" required>
+            <label class="form-label fw-semibold small">Destination Account *</label>
+            <select name="dest_account" class="form-select" id="dest_account" required>
               <option value="">— Select destination —</option>
-              <optgroup label="PHP Accounts">
-                {% for acc in php_accounts %}
-                <option value="{{ acc.pk }}" data-currency="PHP">{{ acc.name }} (&#8369;{{ acc.get_balance|floatformat:2 }})</option>
-                {% endfor %}
-              </optgroup>
-              <optgroup label="TWD Accounts">
-                {% for acc in twd_accounts %}
-                <option value="{{ acc.pk }}" data-currency="TWD">{{ acc.name }} (TWD {{ acc.get_balance|floatformat:2 }})</option>
-                {% endfor %}
-              </optgroup>
+              {% for acc in twd_accounts %}
+              {% if not acc.is_bank_account %}
+              <option value="{{ acc.pk }}"{% if cash_account and acc.pk == cash_account.pk %} selected{% endif %}>
+                {{ acc.name }} (TWD {{ acc.get_balance|floatformat:2 }})
+              </option>
+              {% endif %}
+              {% endfor %}
             </select>
+            <div class="form-text">Defaults to Cash.</div>
           </div>
 
-          <!-- Cross-currency fields -->
-          <div id="section-convert">
-            <div class="mb-3">
-              <label class="form-label fw-semibold small">Deducted Amount *</label>
-              <div class="input-group">
-                <span class="input-group-text fw-bold" id="prefix-deducted">—</span>
-                <input type="number" name="deducted" id="deducted" class="form-control"
-                       step="0.01" min="0.01" placeholder="0.00">
-              </div>
-            </div>
-            <div class="mb-3">
-              <label class="form-label fw-semibold small">Target Received *</label>
-              <div class="input-group">
-                <span class="input-group-text fw-bold" id="prefix-target">—</span>
-                <input type="number" name="target" id="target" class="form-control"
-                       step="0.01" min="0.01" placeholder="0.00">
-              </div>
-            </div>
-            <div class="mb-3">
-              <label class="form-label fw-semibold small d-flex justify-content-between">
-                <span>Exchange Rate <span class="fw-normal text-muted">(auto-calculated)</span></span>
-                {% if php_per_twd %}
-                <button type="button" class="btn btn-link btn-sm p-0 text-warning"
-                        onclick="applyLiveRate('{{ php_per_twd }}')">Use live ({{ php_per_twd }})</button>
-                {% endif %}
-              </label>
-              <input type="number" name="exchange_rate" id="rate" class="form-control"
-                     step="0.000001" min="0.000001" placeholder="Auto-calculated">
-              <div class="form-text">Enter Deducted + Target → Rate is calculated automatically.</div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Amount (TWD) *</label>
+            <div class="input-group">
+              <span class="input-group-text fw-bold">TWD</span>
+              <input type="number" name="amount" id="amount" class="form-control"
+                     step="1" min="1" placeholder="0" required>
             </div>
           </div>
 
-          <!-- Same-currency field -->
-          <div id="section-same" style="display:none">
-            <div class="mb-3">
-              <label class="form-label fw-semibold small">Amount *</label>
-              <div class="input-group">
-                <span class="input-group-text fw-bold" id="prefix-same">—</span>
-                <input type="number" name="amount_same" id="deducted-same" class="form-control"
-                       step="0.01" min="0.01" placeholder="0.00">
-              </div>
-            </div>
-          </div>
-
-          <!-- Preview -->
+          <!-- Live preview -->
           <div class="alert alert-info py-2 mb-3" id="preview" style="display:none">
             <i class="bi bi-calculator me-1"></i>
-            <span id="preview-text">—</span>
+            <span id="preview_text">TWD 0 will be moved</span>
           </div>
 
           <div class="mb-3">
             <label class="form-label fw-semibold small">Date *</label>
             <input type="date" name="date" class="form-control" value="{{ today }}" required>
           </div>
+
           <div class="mb-3">
             <label class="form-label fw-semibold small">Notes</label>
             <textarea name="notes" class="form-control" rows="2" placeholder="Optional..."></textarea>
           </div>
-          <button type="submit" class="btn w-100 btn-lg fw-bold" style="background:#34d399;border-color:#34d399;color:#000">
+
+          <button type="submit" class="btn btn-primary w-100 btn-lg">
             <i class="bi bi-check-circle me-2"></i>Log Withdrawal
           </button>
         </form>
       </div>
     </div>
-  </div>
-</div>
 
-<!-- History -->
-{% if history %}
-<div class="card mt-4">
-  <div class="card-header border-0 pb-0">
-    <h6 class="fw-bold mb-0"><i class="bi bi-clock-history me-2" style="color:#34d399"></i>Recent TW Withdrawals</h6>
-  </div>
-  <div class="card-body p-0">
-    <div class="table-responsive">
-      <table class="table table-hover mb-0 small">
-        <thead><tr>
-          <th>Date</th><th>From</th><th>To</th><th>Deducted</th><th>Received</th><th>Rate</th>
-        </tr></thead>
-        <tbody>
-          {% for h in history %}
-          <tr>
-            <td class="text-muted text-nowrap">{{ h.date|date:"Y-m-d" }}</td>
-            <td><span class="payment-badge" style="background:{{ h.payment_method.color }}22;color:{{ h.payment_method.color }}">{{ h.payment_method.name }}</span></td>
-            <td>{% if h.to_payment_method %}<span class="payment-badge" style="background:{{ h.to_payment_method.color }}22;color:{{ h.to_payment_method.color }}">{{ h.to_payment_method.name }}</span>{% else %}—{% endif %}</td>
-            <td class="text-danger fw-semibold">{% if h.payment_method.currency == 'PHP' %}&#8369;{% else %}{{ h.payment_method.currency }} {% endif %}{{ h.amount|floatformat:2 }}</td>
-            <td class="text-success fw-semibold">{% if h.converted_amount %}{% if h.to_payment_method %}{% if h.to_payment_method.currency == 'PHP' %}&#8369;{% else %}{{ h.to_payment_method.currency }} {% endif %}{% endif %}{{ h.converted_amount|floatformat:2 }}{% else %}—{% endif %}</td>
-            <td class="text-muted">{% if h.exchange_rate %}{{ h.exchange_rate }}{% else %}—{% endif %}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+    <!-- What gets logged card -->
+    <div class="card mt-3" style="border:1px dashed var(--bs-border-color)">
+      <div class="card-body py-3">
+        <div class="small fw-bold text-muted mb-2">WHAT GETS LOGGED AUTOMATICALLY:</div>
+        <div class="d-flex gap-2 align-items-center mb-2">
+          <span class="badge bg-primary">Log 1</span>
+          <span class="small" id="log1_preview">Bank account — TWD amount deducted</span>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+          <span class="badge bg-success">Log 2</span>
+          <span class="small" id="log2_preview">Destination account — TWD amount added</span>
+        </div>
+      </div>
     </div>
+
   </div>
 </div>
-{% endif %}
-
 {% endblock %}
 
 {% block extra_js %}
 <script>
-let currentMode = 'convert';
-
-function currencySymbol(c) { return c === 'PHP' ? '₱' : (c || '—'); }
-
-function getSelectedCurrency(id) {
-  const sel = document.getElementById(id);
-  const opt = sel.options[sel.selectedIndex];
-  return opt ? (opt.getAttribute('data-currency') || '') : '';
-}
-
-function updatePrefixes() {
-  const fc = getSelectedCurrency('from_account');
-  const tc = getSelectedCurrency('to_account');
-  document.getElementById('prefix-deducted').textContent = currencySymbol(fc);
-  document.getElementById('prefix-target').textContent   = currencySymbol(tc);
-  document.getElementById('prefix-same').textContent     = currencySymbol(fc);
-}
-
-function getVal(id) { return parseFloat(document.getElementById(id).value) || 0; }
-function setVal(id, v) { document.getElementById(id).value = v > 0 ? parseFloat(v.toFixed(6)).toString() : ''; }
-
-function applyLiveRate(r) {
-  document.getElementById('rate').value = r;
-  updatePreview();
-}
-
 function updatePreview() {
-  const preview = document.getElementById('preview');
-  if (currentMode === 'convert') {
-    const D = getVal('deducted'), T = getVal('target');
-    const R = D > 0 && T > 0 ? T / D : 0;
-    if (D > 0 && T > 0) {
-      if (R > 0) setVal('rate', R);
-      const fc = getSelectedCurrency('from_account'), tc = getSelectedCurrency('to_account');
-      preview.style.display = '';
-      document.getElementById('preview-text').innerHTML =
-        `${currencySymbol(fc)} <strong>${D.toLocaleString()}</strong> → ${currencySymbol(tc)} <strong>${T.toLocaleString()}</strong>` +
-        ` <span class="text-muted small">(rate: ${parseFloat(R.toFixed(6))})</span>`;
-    } else { preview.style.display = 'none'; }
+  const amt     = parseFloat(document.getElementById('amount').value) || 0;
+  const srcSel  = document.getElementById('source_account');
+  const dstSel  = document.getElementById('dest_account');
+  const srcName = srcSel.options[srcSel.selectedIndex]?.text?.split(' (')[0] || 'Bank';
+  const dstName = dstSel.options[dstSel.selectedIndex]?.text?.split(' (')[0] || 'Destination';
+
+  if (amt > 0) {
+    document.getElementById('preview').style.display = '';
+    document.getElementById('preview_text').textContent =
+      `TWD ${amt.toLocaleString()} will be moved from ${srcName} to ${dstName}`;
+    document.getElementById('log1_preview').textContent =
+      `${srcName} — TWD ${amt.toLocaleString()} deducted`;
+    document.getElementById('log2_preview').textContent =
+      `${dstName} — TWD ${amt.toLocaleString()} added`;
   } else {
-    const A = getVal('deducted-same');
-    const fc = getSelectedCurrency('from_account');
-    if (A > 0) {
-      preview.style.display = '';
-      document.getElementById('preview-text').innerHTML = `${currencySymbol(fc)} <strong>${A.toLocaleString()}</strong> transferred`;
-    } else { preview.style.display = 'none'; }
+    document.getElementById('preview').style.display = 'none';
   }
 }
-
-document.getElementById('deducted').addEventListener('input', updatePreview);
-document.getElementById('target').addEventListener('input', updatePreview);
-document.getElementById('rate').addEventListener('input', updatePreview);
-
-document.getElementById('from_account').addEventListener('change', () => { updatePrefixes(); updatePreview(); });
-document.getElementById('to_account').addEventListener('change',   () => { updatePrefixes(); updatePreview(); });
-document.getElementById('deducted-same').addEventListener('input', updatePreview);
-
-function setMode(mode) {
-  currentMode = mode;
-  document.getElementById('mode-input').value = mode;
-  const isCvt = mode === 'convert';
-  const btnC = document.getElementById('btn-convert');
-  const btnS = document.getElementById('btn-same');
-  if (isCvt) {
-    btnC.className = 'btn flex-grow-1 fw-semibold'; btnC.style.cssText = 'background:#34d399;border-color:#34d399;color:#000';
-    btnS.className = 'btn btn-outline-success flex-grow-1 fw-semibold'; btnS.style.cssText = '';
-  } else {
-    btnC.className = 'btn btn-outline-success flex-grow-1 fw-semibold'; btnC.style.cssText = '';
-    btnS.className = 'btn flex-grow-1 fw-semibold'; btnS.style.cssText = 'background:#34d399;border-color:#34d399;color:#000';
-  }
-  document.getElementById('section-convert').style.display = isCvt ? '' : 'none';
-  document.getElementById('section-same').style.display    = isCvt ? 'none' : '';
-  document.getElementById('form-title').textContent    = isCvt ? 'TWD → PHP Withdrawal' : 'Same Currency Transfer';
-  document.getElementById('form-subtitle').textContent = isCvt ? 'Logs as 1 transfer: TW bank deducted, PHP received' : 'Logs as 1 transfer between accounts';
-  updatePreview();
-}
+document.getElementById('amount').addEventListener('input', updatePreview);
+document.getElementById('source_account').addEventListener('change', updatePreview);
+document.getElementById('dest_account').addEventListener('change', updatePreview);
 </script>
 {% endblock %}

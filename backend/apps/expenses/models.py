@@ -36,7 +36,12 @@ class PaymentMethod(models.Model):
             elif txn.transaction_type == Transaction.TYPE_INCOME:
                 if txn.payment_method == self:
                     balance += txn.amount
-            elif txn.transaction_type in (Transaction.TYPE_TRANSFER, Transaction.TYPE_TOPUP, Transaction.TYPE_PH_WITHDRAWAL):
+            elif txn.transaction_type in (
+                Transaction.TYPE_TRANSFER,
+                Transaction.TYPE_TOPUP,
+                Transaction.TYPE_PH_WITHDRAWAL,
+                Transaction.TYPE_TW_WITHDRAWAL,  # ← NEW
+            ):
                 if txn.payment_method == self:
                     balance -= txn.amount
                 if txn.to_payment_method == self:
@@ -74,7 +79,11 @@ class BudgetLimit(models.Model):
 
     def get_spent(self):
         start = self.month
-        end = self.month.replace(month=self.month.month % 12 + 1, day=1) if self.month.month < 12 else self.month.replace(year=self.month.year + 1, month=1, day=1)
+        end = (
+            self.month.replace(month=self.month.month % 12 + 1, day=1)
+            if self.month.month < 12
+            else self.month.replace(year=self.month.year + 1, month=1, day=1)
+        )
         return Transaction.objects.filter(
             category=self.category, transaction_type=Transaction.TYPE_EXPENSE,
             date__gte=start, date__lt=end, currency=self.currency
@@ -92,17 +101,20 @@ class BudgetLimit(models.Model):
 
 
 class Transaction(models.Model):
-    TYPE_EXPENSE       = 'expense'
-    TYPE_INCOME        = 'income'
-    TYPE_TRANSFER      = 'transfer'
-    TYPE_TOPUP         = 'topup'
-    TYPE_PH_WITHDRAWAL = 'ph_withdrawal'
+    TYPE_EXPENSE        = 'expense'
+    TYPE_INCOME         = 'income'
+    TYPE_TRANSFER       = 'transfer'
+    TYPE_TOPUP          = 'topup'
+    TYPE_PH_WITHDRAWAL  = 'ph_withdrawal'
+    TYPE_TW_WITHDRAWAL  = 'tw_withdrawal'   # ← NEW: TWD bank → Cash
+
     TYPE_CHOICES = [
         (TYPE_EXPENSE,       'Expense'),
         (TYPE_INCOME,        'Income'),
         (TYPE_TRANSFER,      'Transfer'),
         (TYPE_TOPUP,         'Top-up'),
         (TYPE_PH_WITHDRAWAL, 'PH Withdrawal'),
+        (TYPE_TW_WITHDRAWAL, 'TW Withdrawal'),  # ← NEW
     ]
 
     date = models.DateField(default=datetime.date.today)
@@ -110,19 +122,29 @@ class Transaction(models.Model):
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     currency = models.CharField(max_length=3, default='TWD')
     transaction_type = models.CharField(max_length=15, choices=TYPE_CHOICES, default=TYPE_EXPENSE)
-    payment_method = models.ForeignKey(PaymentMethod, on_delete=models.PROTECT, related_name='transactions', null=True, blank=True)
-    to_payment_method = models.ForeignKey(PaymentMethod, on_delete=models.PROTECT, related_name='incoming_transfers', null=True, blank=True)
-    category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name='transactions', null=True, blank=True)
+    payment_method = models.ForeignKey(
+        PaymentMethod, on_delete=models.PROTECT,
+        related_name='transactions', null=True, blank=True
+    )
+    to_payment_method = models.ForeignKey(
+        PaymentMethod, on_delete=models.PROTECT,
+        related_name='incoming_transfers', null=True, blank=True
+    )
+    category = models.ForeignKey(
+        Category, on_delete=models.PROTECT,
+        related_name='transactions', null=True, blank=True
+    )
     notes = models.TextField(blank=True, default='')
     is_hidden = models.BooleanField(default=False)
     is_recurring_instance = models.BooleanField(default=False)
-    # Discount applied to this expense (savings tracking)
-    discount_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
-    # For withdrawals/transfers: exchange rate and converted amount
+    # For PH/TW withdrawals: exchange rate used and converted amount received
     exchange_rate = models.DecimalField(max_digits=10, decimal_places=6, null=True, blank=True)
     converted_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
-    # Link paired transactions (PH withdrawal creates 2 logs)
-    paired_transaction = models.OneToOneField('self', null=True, blank=True, on_delete=models.SET_NULL, related_name='pair')
+    # Link paired transactions (withdrawal creates 2 logs)
+    paired_transaction = models.OneToOneField(
+        'self', null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='pair'
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -140,121 +162,28 @@ class Transaction(models.Model):
             self.TYPE_TRANSFER:      'info',
             self.TYPE_TOPUP:         'warning',
             self.TYPE_PH_WITHDRAWAL: 'purple',
+            self.TYPE_TW_WITHDRAWAL: 'primary',   # ← NEW: blue badge
         }.get(self.transaction_type, 'secondary')
 
 
 Expense = Transaction
 
 
-class TransactionAuditLog(models.Model):
-    ACTION_CREATE = 'created'
-    ACTION_UPDATE = 'updated'
-    ACTION_DELETE = 'deleted'
-    ACTION_CHOICES = [
-        (ACTION_CREATE, 'Created'),
-        (ACTION_UPDATE, 'Updated'),
-        (ACTION_DELETE, 'Deleted'),
-    ]
-    transaction_id   = models.IntegerField()
-    transaction_name = models.CharField(max_length=255, default='')
-    user             = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
-    action           = models.CharField(max_length=10, choices=ACTION_CHOICES)
-    changes          = models.TextField(blank=True, default='{}')  # JSON
-    timestamp        = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ['-timestamp']
-
-    def __str__(self):
-        return f"{self.timestamp:%Y-%m-%d %H:%M} [{self.action}] {self.transaction_name}"
-
-    def get_changes(self):
-        import json
-        try:
-            return json.loads(self.changes)
-        except Exception:
-            return {}
-
-
-class TransactionTemplate(models.Model):
-    label            = models.CharField(max_length=100)
-    name             = models.CharField(max_length=255)
-    amount           = models.DecimalField(max_digits=12, decimal_places=2)
-    currency         = models.CharField(max_length=3, default='TWD')
-    transaction_type = models.CharField(max_length=15, choices=Transaction.TYPE_CHOICES, default=Transaction.TYPE_EXPENSE)
-    payment_method   = models.ForeignKey(PaymentMethod, on_delete=models.SET_NULL, null=True, blank=True)
-    category         = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True)
-    notes            = models.TextField(blank=True, default='')
-    created_at       = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ['label']
-
-    def __str__(self):
-        return self.label
-
-
-class TransactionAttachment(models.Model):
-    transaction   = models.ForeignKey(Transaction, on_delete=models.CASCADE, related_name='attachments')
-    file          = models.FileField(upload_to='attachments/')
-    original_name = models.CharField(max_length=255)
-    uploaded_at   = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ['-uploaded_at']
-
-    def __str__(self):
-        return f"{self.original_name} → {self.transaction}"
-
-    @property
-    def is_image(self):
-        return self.original_name.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp'))
-
-    @property
-    def file_size_kb(self):
-        try:
-            return round(self.file.size / 1024, 1)
-        except Exception:
-            return 0
-
-
-class SharedExpense(models.Model):
-    transaction  = models.ForeignKey(Transaction, on_delete=models.CASCADE, related_name='shared_with')
-    member_name  = models.CharField(max_length=100)
-    share_amount = models.DecimalField(max_digits=12, decimal_places=2)
-    currency     = models.CharField(max_length=3, default='TWD')
-    is_settled   = models.BooleanField(default=False)
-    settled_date = models.DateField(null=True, blank=True)
-    notes        = models.TextField(blank=True, default='')
-    created_at   = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ['-created_at']
-
-    def __str__(self):
-        return f"{self.transaction.name} → {self.member_name} ({self.currency} {self.share_amount})"
-
-
-class UserPreference(models.Model):
-    THEME_DARK  = 'dark'
-    THEME_LIGHT = 'light'
-    THEME_CHOICES = [(THEME_DARK, 'Dark'), (THEME_LIGHT, 'Light')]
-
-    user             = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='preference')
-    theme            = models.CharField(max_length=5, choices=THEME_CHOICES, default=THEME_DARK)
-    default_currency = models.CharField(max_length=3, default='TWD')
-
-    def __str__(self):
-        return f"{self.user.username} preferences"
-
-
 class RecurringExpense(models.Model):
     name = models.CharField(max_length=255)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     currency = models.CharField(max_length=3, default='TWD')
-    transaction_type = models.CharField(max_length=15, choices=Transaction.TYPE_CHOICES, default=Transaction.TYPE_EXPENSE)
-    payment_method = models.ForeignKey(PaymentMethod, on_delete=models.PROTECT, related_name='recurring')
-    to_payment_method = models.ForeignKey(PaymentMethod, on_delete=models.PROTECT, related_name='recurring_incoming', null=True, blank=True)
+    transaction_type = models.CharField(
+        max_length=15, choices=Transaction.TYPE_CHOICES,
+        default=Transaction.TYPE_EXPENSE
+    )
+    payment_method = models.ForeignKey(
+        PaymentMethod, on_delete=models.PROTECT, related_name='recurring'
+    )
+    to_payment_method = models.ForeignKey(
+        PaymentMethod, on_delete=models.PROTECT,
+        related_name='recurring_incoming', null=True, blank=True
+    )
     category = models.ForeignKey(Category, on_delete=models.PROTECT, null=True, blank=True)
     notes = models.TextField(blank=True, default='')
     day_of_month = models.IntegerField(default=1)
@@ -279,3 +208,133 @@ class RecurringExpense(models.Model):
         if self.last_added and self.last_added.year == today.year and self.last_added.month == today.month:
             return False
         return True
+
+
+# ── Transaction Audit Log ─────────────────────────────────────────────────────
+
+class TransactionAuditLog(models.Model):
+    ACTION_CREATE = 'create'
+    ACTION_UPDATE = 'update'
+    ACTION_DELETE = 'delete'
+    ACTION_CHOICES = [
+        (ACTION_CREATE, 'Created'),
+        (ACTION_UPDATE, 'Updated'),
+        (ACTION_DELETE, 'Deleted'),
+    ]
+
+    timestamp        = models.DateTimeField(auto_now_add=True)
+    user             = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='audit_logs'
+    )
+    action           = models.CharField(max_length=10, choices=ACTION_CHOICES)
+    transaction_id   = models.IntegerField()          # keep even after txn is deleted
+    transaction_name = models.CharField(max_length=255)
+    changes          = models.JSONField(default=dict, blank=True)  # {field: [old, new]}
+
+    class Meta:
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"{self.timestamp:%Y-%m-%d %H:%M} [{self.action}] {self.transaction_name}"
+
+
+# ── Transaction Template ──────────────────────────────────────────────────────
+
+class TransactionTemplate(models.Model):
+    """Quick-add presets — fill a form with one click."""
+    label            = models.CharField(max_length=100, unique=True)
+    name             = models.CharField(max_length=255, verbose_name='Description')
+    amount           = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    currency         = models.CharField(max_length=3, default='TWD')
+    transaction_type = models.CharField(
+        max_length=15, choices=Transaction.TYPE_CHOICES,
+        default=Transaction.TYPE_EXPENSE
+    )
+    payment_method   = models.ForeignKey(
+        PaymentMethod, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='templates'
+    )
+    to_payment_method = models.ForeignKey(
+        PaymentMethod, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='templates_incoming'
+    )
+    category         = models.ForeignKey(
+        Category, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='templates'
+    )
+    notes            = models.TextField(blank=True, default='')
+    created_at       = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['label']
+
+    def __str__(self):
+        return self.label
+
+
+# ── Transaction Attachment ────────────────────────────────────────────────────
+
+class TransactionAttachment(models.Model):
+    """File/image attachments for a transaction (e.g. receipt photos)."""
+    transaction   = models.ForeignKey(
+        Transaction, on_delete=models.CASCADE, related_name='attachments'
+    )
+    file          = models.FileField(upload_to='attachments/%Y/%m/')
+    original_name = models.CharField(max_length=255)
+    uploaded_at   = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-uploaded_at']
+
+    def __str__(self):
+        return f"{self.original_name} → {self.transaction}"
+
+
+# ── Shared Expense ────────────────────────────────────────────────────────────
+
+class SharedExpense(models.Model):
+    """Splits a transaction among members, tracking settlement per person."""
+    transaction  = models.ForeignKey(
+        Transaction, on_delete=models.CASCADE, related_name='shared_splits'
+    )
+    member_name  = models.CharField(max_length=100)
+    share_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    currency     = models.CharField(max_length=3, default='TWD')
+    is_settled   = models.BooleanField(default=False)
+    settled_at   = models.DateTimeField(null=True, blank=True)
+    notes        = models.TextField(blank=True, default='')
+
+    class Meta:
+        ordering = ['transaction', 'member_name']
+
+    def __str__(self):
+        status = '✅' if self.is_settled else '⏳'
+        return f"{status} {self.member_name}: {self.currency} {self.share_amount}"
+
+
+# ── User Preference ───────────────────────────────────────────────────────────
+
+class UserPreference(models.Model):
+    """Per-user UI and app preferences."""
+    THEME_DARK  = 'dark'
+    THEME_LIGHT = 'light'
+    THEME_CHOICES = [
+        (THEME_DARK,  'Dark'),
+        (THEME_LIGHT, 'Light'),
+    ]
+
+    user             = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name='preference'
+    )
+    theme            = models.CharField(max_length=10, choices=THEME_CHOICES, default=THEME_DARK)
+    default_currency = models.CharField(max_length=3, default='TWD')
+    created_at       = models.DateTimeField(auto_now_add=True)
+    updated_at       = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'User Preference'
+
+    def __str__(self):
+        return f"{self.user.username} preferences"
