@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% block title %}PH Withdrawal{% endblock %}
+{% block title %}TW Withdrawal{% endblock %}
 
 {% block content %}
 <div class="page-header">
-  <h1><i class="bi bi-bank me-2" style="color:#fbbf24"></i>PH ATM Withdrawal</h1>
+  <h1><i class="bi bi-bank2 me-2" style="color:#34d399"></i>TW ATM Withdrawal</h1>
   <a href="{% url 'expense_list' %}" class="btn btn-sm btn-outline-secondary">
     <i class="bi bi-arrow-left me-1"></i>Back
   </a>
@@ -18,14 +18,14 @@
 {% endif %}
 
 <!-- Live Rate Card -->
-<div class="card mb-4" style="border-left:4px solid #fbbf24;">
+<div class="card mb-4" style="border-left:4px solid #34d399;">
   <div class="card-body py-3">
     <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
       <div>
         <div class="small text-muted fw-semibold text-uppercase mb-1">Live Exchange Rate</div>
         {% if live_rate %}
-        <div class="fs-4 fw-bold">&#8369;1 PHP = <span class="text-success">TWD {{ live_rate }}</span></div>
-        <div class="small text-muted">TWD 1 = &#8369;{{ php_per_twd }}</div>
+        <div class="fs-4 fw-bold">TWD 1 = <span class="text-warning">&#8369;{{ php_per_twd }}</span></div>
+        <div class="small text-muted">&#8369;1 PHP = TWD {{ live_rate }}</div>
         {% else %}
         <div class="text-warning fw-semibold"><i class="bi bi-wifi-off me-1"></i>Live rate unavailable</div>
         {% endif %}
@@ -55,11 +55,11 @@
     <!-- Mode Tabs -->
     <div class="d-flex gap-2 mb-3">
       <button type="button" id="btn-convert" onclick="setMode('convert')"
-              class="btn btn-warning flex-grow-1 fw-semibold">
+              class="btn flex-grow-1 fw-semibold" style="background:#34d399;border-color:#34d399;color:#000">
         <i class="bi bi-arrow-left-right me-1"></i>Cross-Currency
       </button>
       <button type="button" id="btn-same" onclick="setMode('same')"
-              class="btn btn-outline-warning flex-grow-1 fw-semibold">
+              class="btn btn-outline-success flex-grow-1 fw-semibold">
         <i class="bi bi-arrow-right me-1"></i>Same Currency
       </button>
     </div>
@@ -67,10 +67,10 @@
     <div class="card">
       <div class="card-header border-0">
         <h6 class="fw-bold mb-0">
-          <i class="bi bi-cash-coin me-2 text-warning"></i>
-          <span id="form-title">PHP → TWD Withdrawal</span>
+          <i class="bi bi-cash-coin me-2" style="color:#34d399"></i>
+          <span id="form-title">TWD → PHP Withdrawal</span>
         </h6>
-        <div class="small text-muted mt-1" id="form-subtitle">Logs as 1 transfer: PH bank deducted, TWD received</div>
+        <div class="small text-muted mt-1" id="form-subtitle">Logs as 1 transfer: TW bank deducted, PHP received</div>
       </div>
       <div class="card-body">
         <form method="post">
@@ -81,14 +81,14 @@
             <label class="form-label fw-semibold small">From Account *</label>
             <select name="from_account" id="from_account" class="form-select" required>
               <option value="">— Select source —</option>
-              <optgroup label="PHP Accounts">
-                {% for acc in php_accounts %}
-                <option value="{{ acc.pk }}" data-currency="PHP">{{ acc.name }} (&#8369;{{ acc.get_balance|floatformat:2 }})</option>
-                {% endfor %}
-              </optgroup>
               <optgroup label="TWD Accounts">
                 {% for acc in twd_accounts %}
                 <option value="{{ acc.pk }}" data-currency="TWD">{{ acc.name }} (TWD {{ acc.get_balance|floatformat:2 }})</option>
+                {% endfor %}
+              </optgroup>
+              <optgroup label="PHP Accounts">
+                {% for acc in php_accounts %}
+                <option value="{{ acc.pk }}" data-currency="PHP">{{ acc.name }} (&#8369;{{ acc.get_balance|floatformat:2 }})</option>
                 {% endfor %}
               </optgroup>
             </select>
@@ -98,14 +98,14 @@
             <label class="form-label fw-semibold small">To Account *</label>
             <select name="to_account" id="to_account" class="form-select" required>
               <option value="">— Select destination —</option>
-              <optgroup label="TWD Accounts">
-                {% for acc in twd_accounts %}
-                <option value="{{ acc.pk }}" data-currency="TWD">{{ acc.name }} (TWD {{ acc.get_balance|floatformat:2 }})</option>
-                {% endfor %}
-              </optgroup>
               <optgroup label="PHP Accounts">
                 {% for acc in php_accounts %}
                 <option value="{{ acc.pk }}" data-currency="PHP">{{ acc.name }} (&#8369;{{ acc.get_balance|floatformat:2 }})</option>
+                {% endfor %}
+              </optgroup>
+              <optgroup label="TWD Accounts">
+                {% for acc in twd_accounts %}
+                <option value="{{ acc.pk }}" data-currency="TWD">{{ acc.name }} (TWD {{ acc.get_balance|floatformat:2 }})</option>
                 {% endfor %}
               </optgroup>
             </select>
@@ -132,9 +132,9 @@
             <div class="mb-3">
               <label class="form-label fw-semibold small d-flex justify-content-between">
                 <span>Exchange Rate <span class="fw-normal text-muted">(auto-calculated)</span></span>
-                {% if live_rate %}
-                <button type="button" class="btn btn-link btn-sm p-0 text-success"
-                        onclick="applyLiveRate('{{ live_rate }}')">Use live ({{ live_rate }})</button>
+                {% if php_per_twd %}
+                <button type="button" class="btn btn-link btn-sm p-0 text-warning"
+                        onclick="applyLiveRate('{{ php_per_twd }}')">Use live ({{ php_per_twd }})</button>
                 {% endif %}
               </label>
               <input type="number" name="exchange_rate" id="rate" class="form-control"
@@ -169,7 +169,7 @@
             <label class="form-label fw-semibold small">Notes</label>
             <textarea name="notes" class="form-control" rows="2" placeholder="Optional..."></textarea>
           </div>
-          <button type="submit" class="btn btn-warning w-100 btn-lg text-dark fw-bold">
+          <button type="submit" class="btn w-100 btn-lg fw-bold" style="background:#34d399;border-color:#34d399;color:#000">
             <i class="bi bi-check-circle me-2"></i>Log Withdrawal
           </button>
         </form>
@@ -182,7 +182,7 @@
 {% if history %}
 <div class="card mt-4">
   <div class="card-header border-0 pb-0">
-    <h6 class="fw-bold mb-0"><i class="bi bi-clock-history me-2 text-warning"></i>Recent PH Withdrawals</h6>
+    <h6 class="fw-bold mb-0"><i class="bi bi-clock-history me-2" style="color:#34d399"></i>Recent TW Withdrawals</h6>
   </div>
   <div class="card-body p-0">
     <div class="table-responsive">
@@ -273,12 +273,19 @@ function setMode(mode) {
   currentMode = mode;
   document.getElementById('mode-input').value = mode;
   const isCvt = mode === 'convert';
-  document.getElementById('btn-convert').className = isCvt ? 'btn btn-warning flex-grow-1 fw-semibold' : 'btn btn-outline-warning flex-grow-1 fw-semibold';
-  document.getElementById('btn-same').className    = isCvt ? 'btn btn-outline-warning flex-grow-1 fw-semibold' : 'btn btn-warning flex-grow-1 fw-semibold';
+  const btnC = document.getElementById('btn-convert');
+  const btnS = document.getElementById('btn-same');
+  if (isCvt) {
+    btnC.className = 'btn flex-grow-1 fw-semibold'; btnC.style.cssText = 'background:#34d399;border-color:#34d399;color:#000';
+    btnS.className = 'btn btn-outline-success flex-grow-1 fw-semibold'; btnS.style.cssText = '';
+  } else {
+    btnC.className = 'btn btn-outline-success flex-grow-1 fw-semibold'; btnC.style.cssText = '';
+    btnS.className = 'btn flex-grow-1 fw-semibold'; btnS.style.cssText = 'background:#34d399;border-color:#34d399;color:#000';
+  }
   document.getElementById('section-convert').style.display = isCvt ? '' : 'none';
   document.getElementById('section-same').style.display    = isCvt ? 'none' : '';
-  document.getElementById('form-title').textContent    = isCvt ? 'PHP → TWD Withdrawal' : 'Same Currency Transfer';
-  document.getElementById('form-subtitle').textContent = isCvt ? 'Logs as 1 transfer: PH bank deducted, TWD received' : 'Logs as 1 transfer between accounts';
+  document.getElementById('form-title').textContent    = isCvt ? 'TWD → PHP Withdrawal' : 'Same Currency Transfer';
+  document.getElementById('form-subtitle').textContent = isCvt ? 'Logs as 1 transfer: TW bank deducted, PHP received' : 'Logs as 1 transfer between accounts';
   updatePreview();
 }
 </script>

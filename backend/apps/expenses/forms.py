@@ -1,5 +1,5 @@
 from django import forms
-from .models import Transaction, Category, PaymentMethod, BudgetLimit, RecurringExpense
+from .models import Transaction, Category, PaymentMethod, BudgetLimit, RecurringExpense, TransactionTemplate, SharedExpense
 from django.conf import settings
 import datetime
 
@@ -21,7 +21,7 @@ class TransactionForm(forms.ModelForm):
         fields = [
             'date', 'name', 'transaction_type', 'amount', 'currency',
             'payment_method', 'to_payment_method', 'category',
-            'notes', 'is_hidden'
+            'discount_amount', 'notes', 'is_hidden'
         ]
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Description'}),
@@ -30,6 +30,7 @@ class TransactionForm(forms.ModelForm):
             'payment_method': forms.Select(attrs={'class': 'form-select'}),
             'to_payment_method': forms.Select(attrs={'class': 'form-select', 'id': 'id_to_payment_method'}),
             'category': forms.Select(attrs={'class': 'form-select', 'id': 'id_category'}),
+            'discount_amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00', 'min': '0'}),
             'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'placeholder': 'Optional notes...'}),
             'is_hidden': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
@@ -149,3 +150,46 @@ class RecurringExpenseForm(forms.ModelForm):
         self.fields['to_payment_method'].required = False
         self.fields['category'].queryset = Category.objects.filter(is_active=True)
         self.fields['category'].required = False
+
+
+class TransactionTemplateForm(forms.ModelForm):
+    currency = forms.ChoiceField(
+        choices=CURRENCY_CHOICES,
+        widget=forms.Select(attrs={'class': 'form-select form-select-sm'})
+    )
+
+    class Meta:
+        model = TransactionTemplate
+        fields = ['label', 'name', 'amount', 'currency', 'transaction_type', 'payment_method', 'category', 'notes']
+        widgets = {
+            'label':            forms.TextInput(attrs={'class': 'form-control form-control-sm', 'placeholder': 'e.g. Grab Food'}),
+            'name':             forms.TextInput(attrs={'class': 'form-control form-control-sm', 'placeholder': 'Transaction description'}),
+            'amount':           forms.NumberInput(attrs={'class': 'form-control form-control-sm', 'step': '0.01'}),
+            'transaction_type': forms.Select(attrs={'class': 'form-select form-select-sm'}),
+            'payment_method':   forms.Select(attrs={'class': 'form-select form-select-sm'}),
+            'category':         forms.Select(attrs={'class': 'form-select form-select-sm'}),
+            'notes':            forms.Textarea(attrs={'class': 'form-control form-control-sm', 'rows': 2}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['payment_method'].queryset = PaymentMethod.objects.filter(is_active=True)
+        self.fields['payment_method'].required = False
+        self.fields['category'].queryset = Category.objects.filter(is_active=True)
+        self.fields['category'].required = False
+
+
+class SharedExpenseForm(forms.ModelForm):
+    currency = forms.ChoiceField(
+        choices=CURRENCY_CHOICES,
+        widget=forms.Select(attrs={'class': 'form-select form-select-sm'})
+    )
+
+    class Meta:
+        model = SharedExpense
+        fields = ['member_name', 'share_amount', 'currency', 'notes']
+        widgets = {
+            'member_name':  forms.TextInput(attrs={'class': 'form-control form-control-sm', 'placeholder': 'Who shares this?'}),
+            'share_amount': forms.NumberInput(attrs={'class': 'form-control form-control-sm', 'step': '0.01'}),
+            'notes':        forms.Textarea(attrs={'class': 'form-control form-control-sm', 'rows': 2}),
+        }

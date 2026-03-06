@@ -14,7 +14,7 @@ def export_to_excel(transactions_qs, payment_methods_qs):
     # ── All Transactions ──
     ws = wb.active
     ws.title = "All Transactions"
-    headers = ['Date', 'Description', 'Type', 'Amount', 'Currency', 'From Account', 'To Account', 'Category', 'Notes', 'Hidden']
+    headers = ['Date', 'Description', 'Type', 'Amount', 'Currency', 'Exchange Rate', 'Converted Amount', 'From Account', 'To Account', 'Category', 'Notes', 'Hidden']
     for col, h in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col, value=h)
         cell.font = header_font
@@ -29,6 +29,8 @@ def export_to_excel(transactions_qs, payment_methods_qs):
             t.get_transaction_type_display(),
             float(t.amount),
             t.currency,
+            float(t.exchange_rate) if t.exchange_rate else '',
+            float(t.converted_amount) if t.converted_amount else '',
             t.payment_method.name if t.payment_method else '',
             t.to_payment_method.name if t.to_payment_method else '',
             t.category.name if t.category else '',
@@ -43,10 +45,12 @@ def export_to_excel(transactions_qs, payment_methods_qs):
                 cell.fill = alt_fill
             if col == 1 and isinstance(val, datetime.date):
                 cell.number_format = 'YYYY-MM-DD'
-            if col == 4:
+            if col in (4, 7):
                 cell.number_format = '#,##0.00'
+            if col == 6:
+                cell.number_format = '0.0000'
 
-    col_widths = [12, 35, 12, 12, 10, 18, 18, 18, 30, 8]
+    col_widths = [12, 35, 14, 12, 10, 14, 16, 18, 18, 18, 30, 8]
     for i, w in enumerate(col_widths, 1):
         ws.column_dimensions[get_column_letter(i)].width = w
     ws.freeze_panes = 'A2'
@@ -54,15 +58,16 @@ def export_to_excel(transactions_qs, payment_methods_qs):
     # ── Balances ──
     from django.db.models import Sum
     ws2 = wb.create_sheet("Balances")
-    ws2.append(['Payment Method', 'Starting Balance', 'Current Balance'])
+    ws2.append(['Payment Method', 'Currency', 'Starting Balance', 'Current Balance'])
     for cell in ws2[1]:
         cell.font = header_font
         cell.fill = header_fill
     for pm in payment_methods_qs:
-        ws2.append([pm.name, float(pm.starting_balance), float(pm.get_balance())])
+        ws2.append([pm.name, pm.currency, float(pm.starting_balance), float(pm.get_balance())])
     ws2.column_dimensions['A'].width = 20
-    ws2.column_dimensions['B'].width = 18
+    ws2.column_dimensions['B'].width = 10
     ws2.column_dimensions['C'].width = 18
+    ws2.column_dimensions['D'].width = 18
 
     # ── By Category ──
     ws3 = wb.create_sheet("By Category")

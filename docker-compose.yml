@@ -36,6 +36,7 @@ services:
       - media_files:/app/media
       - static_files:/app/staticfiles
       - ./import_data:/app/import_data:ro
+      - ./backups:/app/backups
     depends_on:
       db:
         condition: service_healthy
@@ -44,7 +45,6 @@ services:
              python manage.py collectstatic --noinput &&
              python manage.py create_admin &&
              python manage.py seed_data &&
-             python manage.py import_excel --file /app/import_data/Expenses_V2_Taiwan_1.xlsx &&
              gunicorn expense_tracker.wsgi:application --bind 0.0.0.0:8000 --workers 3"
 
   nginx:
@@ -72,6 +72,7 @@ services:
       - POSTGRES_PORT=5432
     volumes:
       - media_files:/app/media
+      - ./backups:/app/backups
     depends_on:
       db:
         condition: service_healthy

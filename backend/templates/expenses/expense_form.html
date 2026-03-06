@@ -14,21 +14,27 @@
 <div class="d-flex flex-wrap gap-2 mb-3">
   {% for b in balances %}
   <div class="px-3 py-1 rounded-pill small fw-semibold" style="background:{{ b.pm.color }}20;border:1px solid {{ b.pm.color }}44;color:{{ b.pm.color }}">
-    {{ b.pm.name }}: TWD {{ b.balance|floatformat:0 }}
+    {{ b.pm.name }}:
+    {% if b.pm.currency == 'PHP' %}&#8369;{% else %}{{ b.pm.currency }} {% endif %}{{ b.balance|floatformat:0 }}
   </div>
   {% endfor %}
 </div>
 {% endif %}
 
-<div class="row justify-content-center">
+<!-- Duplicate warning -->
+<div id="duplicate-warning" class="alert alert-warning py-2 small d-none mb-3">
+  <i class="bi bi-exclamation-triangle me-1"></i>
+  <strong>Possible duplicate:</strong> <span id="duplicate-detail"></span>
+</div>
+
+<div class="row g-3">
   <div class="col-md-8 col-lg-6">
     <div class="card">
       <div class="card-body p-4">
-        <form method="post">
+        <form method="post" id="txn-form">
           {% csrf_token %}
           <div class="row g-3">
 
-            <!-- Transaction Type — shown first, drives the UI -->
             <div class="col-12">
               <label class="form-label fw-semibold small">Transaction Type *</label>
               <div class="d-flex gap-2 flex-wrap" id="type-buttons">
@@ -64,13 +70,11 @@
               {% if form.amount.errors %}<div class="text-danger small">{{ form.amount.errors }}</div>{% endif %}
             </div>
 
-            <!-- From Account -->
             <div class="col-md-6">
               <label class="form-label fw-semibold small" id="from-label">From Account *</label>
               {{ form.payment_method }}
             </div>
 
-            <!-- To Account (only for transfer/topup) -->
             <div class="col-md-6" id="to-account-row" style="display:none">
               <label class="form-label fw-semibold small">To Account *</label>
               {{ form.to_payment_method }}
@@ -79,12 +83,22 @@
               {% endif %}
             </div>
 
-            <!-- Category (hidden for transfers) -->
             <div class="col-md-6" id="category-row">
               <label class="form-label fw-semibold small">Category</label>
               {{ form.category }}
             </div>
 
+            <div class="col-md-6" id="discount-row" style="display:none">
+              <label class="form-label fw-semibold small">
+                <i class="bi bi-tag me-1 text-success"></i>Discount / Savings
+                <span class="text-muted fw-normal">(optional)</span>
+              </label>
+              <div class="input-group">
+                <span class="input-group-text">-</span>
+                {{ form.discount_amount }}
+              </div>
+              <div class="form-text">Amount saved on this purchase</div>
+            </div>
             <div class="col-12">
               <label class="form-label fw-semibold small">Notes</label>
               {{ form.notes }}
@@ -114,6 +128,92 @@
       </div>
     </div>
   </div>
+
+  {% if expense %}
+  <!-- Right column: Attachments + Shared Expenses (edit mode only) -->
+  <div class="col-md-4 col-lg-3">
+
+    <!-- Attachments -->
+    <div class="card mb-3">
+      <div class="card-header border-0 pb-0">
+        <h6 class="fw-bold mb-0 small"><i class="bi bi-paperclip me-1"></i>Attachments</h6>
+      </div>
+      <div class="card-body">
+        <div id="attachment-list">
+          {% for att in attachments %}
+          <div class="d-flex align-items-center gap-2 mb-2 small" id="att-{{ att.pk }}">
+            {% if att.is_image %}
+            <a href="{{ att.file.url }}" target="_blank">
+              <img src="{{ att.file.url }}" style="width:40px;height:40px;object-fit:cover;border-radius:4px">
+            </a>
+            {% else %}
+            <i class="bi bi-file-earmark-text fs-4 text-muted"></i>
+            {% endif %}
+            <div class="flex-grow-1 text-truncate">
+              <a href="{{ att.file.url }}" target="_blank" class="text-decoration-none">{{ att.original_name }}</a>
+              <div class="text-muted" style="font-size:.7rem">{{ att.file_size_kb }} KB</div>
+            </div>
+            <button class="btn btn-sm btn-outline-danger py-0 px-1"
+                    onclick="deleteAttachment({{ att.pk }})">
+              <i class="bi bi-trash"></i>
+            </button>
+          </div>
+          {% empty %}
+          <div class="text-muted small text-center py-2" id="no-attachments">No attachments</div>
+          {% endfor %}
+        </div>
+        <div class="mt-2">
+          <input type="file" id="attachment-input" class="form-control form-control-sm" accept="image/*,.pdf,.xlsx,.csv">
+          <button class="btn btn-sm btn-outline-secondary w-100 mt-1" onclick="uploadAttachment()">
+            <i class="bi bi-upload me-1"></i>Upload
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Shared Expenses -->
+    <div class="card">
+      <div class="card-header border-0 pb-0">
+        <h6 class="fw-bold mb-0 small"><i class="bi bi-people me-1"></i>Shared With</h6>
+      </div>
+      <div class="card-body">
+        <div id="shared-list">
+          {% for s in shared %}
+          <div class="d-flex align-items-center justify-content-between mb-2 small" id="shared-{{ s.pk }}">
+            <div>
+              <div class="fw-semibold">{{ s.member_name }}</div>
+              <div class="text-muted">{{ s.currency }} {{ s.share_amount }}</div>
+            </div>
+            <div class="d-flex gap-1">
+              <button class="btn btn-sm py-0 px-1 {% if s.is_settled %}btn-success{% else %}btn-outline-secondary{% endif %}"
+                      onclick="toggleSettle({{ s.pk }}, this)" title="Toggle settled">
+                <i class="bi bi-check"></i>
+              </button>
+              <button class="btn btn-sm btn-outline-danger py-0 px-1"
+                      onclick="deleteShared({{ s.pk }})">
+                <i class="bi bi-trash"></i>
+              </button>
+            </div>
+          </div>
+          {% empty %}
+          <div class="text-muted small text-center py-1" id="no-shared">Not shared</div>
+          {% endfor %}
+        </div>
+        <hr class="my-2">
+        <div class="mb-1">
+          <input type="text" id="shared-name" class="form-control form-control-sm" placeholder="Member name">
+        </div>
+        <div class="mb-1">
+          <input type="number" id="shared-amount" class="form-control form-control-sm" step="0.01" placeholder="Amount">
+        </div>
+        <button class="btn btn-sm btn-outline-primary w-100" onclick="addShared()">
+          <i class="bi bi-plus me-1"></i>Add
+        </button>
+      </div>
+    </div>
+
+  </div>
+  {% endif %}
 </div>
 
 <style>
@@ -128,23 +228,25 @@
 
 {% block extra_js %}
 <script>
+const TXN_PK = {{ expense.pk|default:"null" }};
+const CSRF   = '{{ csrf_token }}';
+
 function updateFormForType(type) {
   const toRow       = document.getElementById('to-account-row');
   const catRow      = document.getElementById('category-row');
+  const discountRow = document.getElementById('discount-row');
   const fromLabel   = document.getElementById('from-label');
-
   if (type === 'transfer' || type === 'topup') {
-    toRow.style.display = '';
-    catRow.style.display = 'none';
+    toRow.style.display = ''; catRow.style.display = 'none';
     fromLabel.textContent = 'From Account *';
+    discountRow.style.display = 'none';
   } else {
-    toRow.style.display = 'none';
-    catRow.style.display = '';
+    toRow.style.display = 'none'; catRow.style.display = '';
     fromLabel.textContent = type === 'income' ? 'Into Account *' : 'From Account *';
+    discountRow.style.display = type === 'expense' ? '' : 'none';
   }
 }
 
-// Type button toggle
 document.querySelectorAll('.type-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
@@ -154,8 +256,127 @@ document.querySelectorAll('.type-btn').forEach(btn => {
   });
 });
 
-// Init on page load
 const checkedType = document.querySelector('input[name="transaction_type"]:checked');
 if (checkedType) updateFormForType(checkedType.value);
+
+// ── Duplicate detection ───────────────────────────────────────────────────────
+let dupTimer;
+function checkDuplicate() {
+  const amount = document.querySelector('[name=amount]')?.value;
+  const pm     = document.querySelector('[name=payment_method]')?.value;
+  const date   = document.querySelector('[name=date]')?.value;
+  const type   = document.querySelector('input[name=transaction_type]:checked')?.value;
+  if (!amount || !pm || !date || type !== 'expense') {
+    document.getElementById('duplicate-warning').classList.add('d-none');
+    return;
+  }
+  clearTimeout(dupTimer);
+  dupTimer = setTimeout(() => {
+    const exclude = TXN_PK ? `&exclude=${TXN_PK}` : '';
+    fetch(`/expenses/duplicate-check/?amount=${amount}&payment_method=${pm}&date=${date}${exclude}`)
+      .then(r => r.json())
+      .then(d => {
+        const warn = document.getElementById('duplicate-warning');
+        if (d.duplicate) {
+          document.getElementById('duplicate-detail').textContent =
+            `"${d.name}" on ${d.date} has the same amount and account.`;
+          warn.classList.remove('d-none');
+        } else {
+          warn.classList.add('d-none');
+        }
+      });
+  }, 600);
+}
+document.querySelector('[name=amount]')?.addEventListener('input', checkDuplicate);
+document.querySelector('[name=payment_method]')?.addEventListener('change', checkDuplicate);
+document.querySelector('[name=date]')?.addEventListener('change', checkDuplicate);
+document.querySelectorAll('input[name=transaction_type]').forEach(r => r.addEventListener('change', checkDuplicate));
+
+// ── Attachments ───────────────────────────────────────────────────────────────
+function uploadAttachment() {
+  if (!TXN_PK) return;
+  const file = document.getElementById('attachment-input').files[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('file', file); fd.append('csrfmiddlewaretoken', CSRF);
+  fetch(`/expenses/${TXN_PK}/attachments/upload/`, { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(d => {
+      if (!d.success) { alert('Upload failed'); return; }
+      document.getElementById('no-attachments')?.remove();
+      const html = d.is_image
+        ? `<a href="${d.url}" target="_blank"><img src="${d.url}" style="width:40px;height:40px;object-fit:cover;border-radius:4px"></a>`
+        : `<i class="bi bi-file-earmark-text fs-4 text-muted"></i>`;
+      const div = document.createElement('div');
+      div.id = `att-${d.id}`;
+      div.className = 'd-flex align-items-center gap-2 mb-2 small';
+      div.innerHTML = `${html}
+        <div class="flex-grow-1 text-truncate">
+          <a href="${d.url}" target="_blank" class="text-decoration-none">${d.name}</a>
+          <div class="text-muted" style="font-size:.7rem">${d.size_kb} KB</div>
+        </div>
+        <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteAttachment(${d.id})">
+          <i class="bi bi-trash"></i>
+        </button>`;
+      document.getElementById('attachment-list').appendChild(div);
+      document.getElementById('attachment-input').value = '';
+    });
+}
+
+function deleteAttachment(pk) {
+  if (!confirm('Delete this attachment?')) return;
+  const fd = new FormData(); fd.append('csrfmiddlewaretoken', CSRF);
+  fetch(`/attachments/${pk}/delete/`, { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(d => { if (d.success) document.getElementById(`att-${pk}`)?.remove(); });
+}
+
+// ── Shared Expenses ───────────────────────────────────────────────────────────
+function addShared() {
+  if (!TXN_PK) return;
+  const name   = document.getElementById('shared-name').value.trim();
+  const amount = document.getElementById('shared-amount').value;
+  if (!name || !amount) { alert('Enter name and amount'); return; }
+  const fd = new FormData();
+  fd.append('member_name', name); fd.append('share_amount', amount);
+  fd.append('csrfmiddlewaretoken', CSRF);
+  fetch(`/expenses/${TXN_PK}/shared/create/`, { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(d => {
+      if (!d.success) { alert('Error'); return; }
+      document.getElementById('no-shared')?.remove();
+      const div = document.createElement('div');
+      div.id = `shared-${d.id}`;
+      div.className = 'd-flex align-items-center justify-content-between mb-2 small';
+      div.innerHTML = `<div><div class="fw-semibold">${d.member_name}</div>
+        <div class="text-muted">${d.currency} ${d.share_amount}</div></div>
+        <div class="d-flex gap-1">
+          <button class="btn btn-sm btn-outline-secondary py-0 px-1" onclick="toggleSettle(${d.id},this)"><i class="bi bi-check"></i></button>
+          <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteShared(${d.id})"><i class="bi bi-trash"></i></button>
+        </div>`;
+      document.getElementById('shared-list').appendChild(div);
+      document.getElementById('shared-name').value = '';
+      document.getElementById('shared-amount').value = '';
+    });
+}
+
+function toggleSettle(pk, btn) {
+  const fd = new FormData(); fd.append('csrfmiddlewaretoken', CSRF);
+  fetch(`/shared/${pk}/settle/`, { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(d => {
+      btn.className = d.is_settled
+        ? 'btn btn-sm btn-success py-0 px-1'
+        : 'btn btn-sm btn-outline-secondary py-0 px-1';
+    });
+}
+
+function deleteShared(pk) {
+  if (!confirm('Remove this shared entry?')) return;
+  const fd = new FormData(); fd.append('csrfmiddlewaretoken', CSRF);
+  fetch(`/shared/${pk}/delete/`, { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(d => { if (d.success) document.getElementById(`shared-${pk}`)?.remove(); });
+}
 </script>
 {% endblock %}

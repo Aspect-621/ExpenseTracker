@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Quick Templates{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-lightning-fill me-2" style="color:#f472b6"></i>Quick Templates</h1>
+</div>
+{% if messages %}{% for msg in messages %}
+<div class="alert alert-{% if msg.tags == 'error' %}danger{% else %}success{% endif %} alert-dismissible">
+  {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>{% endfor %}{% endif %}
+<div class="row g-3">
+  <div class="col-md-4">
+    <div class="card">
+      <div class="card-header border-0 pb-0"><h6 class="fw-bold mb-0">Create Template</h6></div>
+      <div class="card-body">
+        <form method="post">{% csrf_token %}
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">Quick Label *</label>
+            {{ form.label }}
+            <div class="form-text">Shown on the button, e.g. "Grab Food"</div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">Transaction Description *</label>
+            {{ form.name }}
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">Type *</label>
+            {{ form.transaction_type }}
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">Amount *</label>
+            <div class="input-group input-group-sm">{{ form.currency }}{{ form.amount }}</div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">Account</label>
+            {{ form.payment_method }}
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">Category</label>
+            {{ form.category }}
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Notes</label>
+            {{ form.notes }}
+          </div>
+          <button type="submit" class="btn btn-accent w-100">
+            <i class="bi bi-plus me-1"></i>Create Template
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-8">
+    <div class="row g-2">
+      {% for tpl in templates %}
+      <div class="col-sm-6 col-lg-4">
+        <div class="card h-100" style="border-left:4px solid #f472b6">
+          <div class="card-body py-3">
+            <div class="fw-bold mb-1">{{ tpl.label }}</div>
+            <div class="small text-muted mb-1">{{ tpl.name }}</div>
+            <div class="small fw-semibold mb-1">
+              {% if tpl.currency == 'PHP' %}&#8369;{% else %}{{ tpl.currency }} {% endif %}{{ tpl.amount|floatformat:2 }}
+            </div>
+            {% if tpl.payment_method %}
+            <span class="payment-badge small" style="background:{{ tpl.payment_method.color }}22;color:{{ tpl.payment_method.color }}">
+              {{ tpl.payment_method.name }}
+            </span>
+            {% endif %}
+          </div>
+          <div class="card-footer border-0 py-2 d-flex gap-2">
+            <form method="post" action="{% url 'template_quick_add' tpl.pk %}" class="flex-grow-1">{% csrf_token %}
+              <button type="submit" class="btn btn-sm w-100" style="background:#f472b6;border-color:#f472b6;color:#000">
+                <i class="bi bi-lightning me-1"></i>Add Now
+              </button>
+            </form>
+            <form method="post" action="{% url 'template_delete' tpl.pk %}"
+                  onsubmit="return confirm('Delete template?')">{% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-outline-danger px-2">
+                <i class="bi bi-trash"></i>
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+      {% empty %}
+      <div class="col-12">
+        <div class="card"><div class="card-body text-center text-muted py-5">
+          <i class="bi bi-lightning display-4 d-block mb-2 opacity-25"></i>
+          No templates yet — create one to quick-add frequent transactions in one click.
+        </div></div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

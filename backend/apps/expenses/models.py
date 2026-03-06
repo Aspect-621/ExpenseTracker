@@ -116,7 +116,9 @@ class Transaction(models.Model):
     notes = models.TextField(blank=True, default='')
     is_hidden = models.BooleanField(default=False)
     is_recurring_instance = models.BooleanField(default=False)
-    # For PH withdrawals: exchange rate used and TWD amount received
+    # Discount applied to this expense (savings tracking)
+    discount_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    # For withdrawals/transfers: exchange rate and converted amount
     exchange_rate = models.DecimalField(max_digits=10, decimal_places=6, null=True, blank=True)
     converted_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     # Link paired transactions (PH withdrawal creates 2 logs)
@@ -142,6 +144,108 @@ class Transaction(models.Model):
 
 
 Expense = Transaction
+
+
+class TransactionAuditLog(models.Model):
+    ACTION_CREATE = 'created'
+    ACTION_UPDATE = 'updated'
+    ACTION_DELETE = 'deleted'
+    ACTION_CHOICES = [
+        (ACTION_CREATE, 'Created'),
+        (ACTION_UPDATE, 'Updated'),
+        (ACTION_DELETE, 'Deleted'),
+    ]
+    transaction_id   = models.IntegerField()
+    transaction_name = models.CharField(max_length=255, default='')
+    user             = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    action           = models.CharField(max_length=10, choices=ACTION_CHOICES)
+    changes          = models.TextField(blank=True, default='{}')  # JSON
+    timestamp        = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"{self.timestamp:%Y-%m-%d %H:%M} [{self.action}] {self.transaction_name}"
+
+    def get_changes(self):
+        import json
+        try:
+            return json.loads(self.changes)
+        except Exception:
+            return {}
+
+
+class TransactionTemplate(models.Model):
+    label            = models.CharField(max_length=100)
+    name             = models.CharField(max_length=255)
+    amount           = models.DecimalField(max_digits=12, decimal_places=2)
+    currency         = models.CharField(max_length=3, default='TWD')
+    transaction_type = models.CharField(max_length=15, choices=Transaction.TYPE_CHOICES, default=Transaction.TYPE_EXPENSE)
+    payment_method   = models.ForeignKey(PaymentMethod, on_delete=models.SET_NULL, null=True, blank=True)
+    category         = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True)
+    notes            = models.TextField(blank=True, default='')
+    created_at       = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['label']
+
+    def __str__(self):
+        return self.label
+
+
+class TransactionAttachment(models.Model):
+    transaction   = models.ForeignKey(Transaction, on_delete=models.CASCADE, related_name='attachments')
+    file          = models.FileField(upload_to='attachments/')
+    original_name = models.CharField(max_length=255)
+    uploaded_at   = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-uploaded_at']
+
+    def __str__(self):
+        return f"{self.original_name} → {self.transaction}"
+
+    @property
+    def is_image(self):
+        return self.original_name.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp'))
+
+    @property
+    def file_size_kb(self):
+        try:
+            return round(self.file.size / 1024, 1)
+        except Exception:
+            return 0
+
+
+class SharedExpense(models.Model):
+    transaction  = models.ForeignKey(Transaction, on_delete=models.CASCADE, related_name='shared_with')
+    member_name  = models.CharField(max_length=100)
+    share_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    currency     = models.CharField(max_length=3, default='TWD')
+    is_settled   = models.BooleanField(default=False)
+    settled_date = models.DateField(null=True, blank=True)
+    notes        = models.TextField(blank=True, default='')
+    created_at   = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.transaction.name} → {self.member_name} ({self.currency} {self.share_amount})"
+
+
+class UserPreference(models.Model):
+    THEME_DARK  = 'dark'
+    THEME_LIGHT = 'light'
+    THEME_CHOICES = [(THEME_DARK, 'Dark'), (THEME_LIGHT, 'Light')]
+
+    user             = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='preference')
+    theme            = models.CharField(max_length=5, choices=THEME_CHOICES, default=THEME_DARK)
+    default_currency = models.CharField(max_length=3, default='TWD')
+
+    def __str__(self):
+        return f"{self.user.username} preferences"
 
 
 class RecurringExpense(models.Model):

@@ -17,13 +17,19 @@
 </div>
 
 <!-- Live Balances (mini bar) -->
-<div class="d-flex flex-wrap gap-2 mb-3">
-  {% for b in balances %}
-  <div class="px-3 py-1 rounded-pill small fw-semibold"
-       style="background:{{ b.pm.color }}20;border:1px solid {{ b.pm.color }}44;color:{{ b.pm.color }}">
-    {{ b.pm.name }}: TWD {{ b.balance|floatformat:0 }}
+<div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
+  <div id="balance-bar" class="d-flex flex-wrap gap-2">
+    {% for b in balances %}
+    <div class="px-3 py-1 rounded-pill small fw-semibold"
+         style="background:{{ b.pm.color }}20;border:1px solid {{ b.pm.color }}44;color:{{ b.pm.color }}">
+      {{ b.pm.name }}:
+      {% if b.pm.currency == 'PHP' %}&#8369;{% else %}{{ b.pm.currency }} {% endif %}{{ b.balance|floatformat:0 }}
+    </div>
+    {% endfor %}
   </div>
-  {% endfor %}
+  <button id="refresh-balances-btn" onclick="refreshBalances()" class="btn btn-sm btn-outline-secondary py-0 px-2 ms-1" title="Refresh balances">
+    <i class="bi bi-arrow-clockwise" id="refresh-icon"></i>
+  </button>
 </div>
 
 <!-- Filter Bar -->
@@ -84,10 +90,32 @@
 
 <!-- Table -->
 <div class="card">
+  <!-- Bulk action toolbar (admin only) -->
+  {% if user.is_admin_user %}
+  <div id="bulk-toolbar" class="card-header border-0 py-2 d-none">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      <span class="small fw-semibold text-muted"><span id="bulk-count">0</span> selected</span>
+      <button class="btn btn-sm btn-outline-secondary" onclick="bulkAction('hide')"><i class="bi bi-eye-slash me-1"></i>Hide</button>
+      <button class="btn btn-sm btn-outline-secondary" onclick="bulkAction('show')"><i class="bi bi-eye me-1"></i>Show</button>
+      <div class="d-flex gap-1 align-items-center">
+        <select id="bulk-cat" class="form-select form-select-sm" style="width:auto">
+          <option value="">— Recategorize to —</option>
+          {% for cat in categories %}
+          <option value="{{ cat.pk }}">{{ cat.name }}</option>
+          {% endfor %}
+        </select>
+        <button class="btn btn-sm btn-outline-primary" onclick="bulkAction('recategorize')">Apply</button>
+      </div>
+      <button class="btn btn-sm btn-outline-danger ms-auto" onclick="bulkAction('delete')"><i class="bi bi-trash me-1"></i>Delete selected</button>
+    </div>
+  </div>
+  {% endif %}
+
   <div class="card-body p-0">
     <div class="table-responsive">
       <table class="table table-hover mb-0">
         <thead><tr>
+          {% if user.is_admin_user %}<th style="width:1px"><input type="checkbox" id="select-all" class="form-check-input" onchange="toggleSelectAll(this)"></th>{% endif %}
           <th><a href="?sort={% if sort == '-date' %}date{% else %}-date{% endif %}&{{ request.GET.urlencode }}" class="text-muted text-decoration-none">Date {% if sort == 'date' %}↑{% elif sort == '-date' %}↓{% endif %}</a></th>
           <th>Description</th>
           <th>Type</th>
@@ -98,17 +126,20 @@
         </tr></thead>
         <tbody>
           {% for t in expenses %}
-          <tr {% if t.is_hidden %}class="hidden-row"{% endif %}>
+          <tr {% if t.is_hidden %}class="hidden-row"{% endif %} id="row-{{ t.pk }}">
+            {% if user.is_admin_user %}
+            <td><input type="checkbox" class="form-check-input row-check" value="{{ t.pk }}" onchange="updateBulkToolbar()"></td>
+            {% endif %}
             <td class="text-muted small text-nowrap">{{ t.date|date:"Y-m-d" }}</td>
             <td>
               <div class="fw-semibold">{{ t.name }}</div>
               {% if t.notes %}<div class="small text-muted">{{ t.notes|truncatechars:50 }}</div>{% endif %}
               {% if t.is_hidden %}<span class="badge bg-danger" style="font-size:.65rem"><i class="bi bi-eye-slash"></i> hidden</span>{% endif %}
               {% if t.is_recurring_instance %}<span class="badge bg-info" style="font-size:.65rem"><i class="bi bi-arrow-repeat"></i> recurring</span>{% endif %}
+              {% if t.attachments.count %}<span class="badge bg-secondary" style="font-size:.65rem"><i class="bi bi-paperclip"></i> {{ t.attachments.count }}</span>{% endif %}
+              {% if t.shared_with.count %}<span class="badge bg-warning text-dark" style="font-size:.65rem"><i class="bi bi-people"></i> shared</span>{% endif %}
             </td>
-            <td>
-              <span class="badge bg-{{ t.type_badge_color }}">{{ t.get_transaction_type_display }}</span>
-            </td>
+            <td><span class="badge bg-{{ t.type_badge_color }}">{{ t.get_transaction_type_display }}</span></td>
             <td>
               <div>
                 <span class="payment-badge" style="background:{{ t.payment_method.color }}22;color:{{ t.payment_method.color }}">
@@ -121,14 +152,15 @@
             </td>
             <td>
               {% if t.category %}
-              <span class="category-badge" style="background:{{ t.category.color }}22;color:{{ t.category.color }}">
-                {{ t.category.name }}
-              </span>
+              <span class="category-badge" style="background:{{ t.category.color }}22;color:{{ t.category.color }}">{{ t.category.name }}</span>
               {% else %}—{% endif %}
             </td>
             <td class="text-end amount-cell text-nowrap {% if t.transaction_type == 'income' %}text-success{% elif t.transaction_type == 'expense' %}text-danger{% else %}text-info{% endif %}">
               {% if t.transaction_type == 'income' %}+{% elif t.transaction_type == 'expense' %}-{% endif %}
               {{ t.currency }} {{ t.amount|floatformat:2 }}
+              {% if t.discount_amount %}
+              <div class="text-success" style="font-size:.7rem"><i class="bi bi-tag me-1"></i>-{{ t.currency }} {{ t.discount_amount|floatformat:2 }}</div>
+              {% endif %}
             </td>
             {% if user.is_admin_user %}
             <td class="text-center text-nowrap">
@@ -148,7 +180,7 @@
             {% endif %}
           </tr>
           {% empty %}
-          <tr><td colspan="7" class="text-center py-5 text-muted">
+          <tr><td colspan="8" class="text-center py-5 text-muted">
             <i class="bi bi-inbox display-4 d-block mb-2 opacity-25"></i>
             No transactions found. {% if user.is_admin_user %}<a href="{% url 'expense_create' %}">Add one!</a>{% endif %}
           </td></tr>
@@ -193,7 +225,37 @@
 
 {% block extra_js %}
 <script>
-function confirmDelete(pk, name) {
+function toggleSelectAll(cb) {
+  document.querySelectorAll('.row-check').forEach(c => c.checked = cb.checked);
+  updateBulkToolbar();
+}
+function updateBulkToolbar() {
+  const checked = document.querySelectorAll('.row-check:checked');
+  const toolbar  = document.getElementById('bulk-toolbar');
+  document.getElementById('bulk-count').textContent = checked.length;
+  toolbar.classList.toggle('d-none', checked.length === 0);
+}
+function bulkAction(action) {
+  const pks = [...document.querySelectorAll('.row-check:checked')].map(c => c.value);
+  if (!pks.length) return;
+  if (action === 'delete' && !confirm(`Delete ${pks.length} transaction(s)? This cannot be undone.`)) return;
+  const fd = new FormData();
+  fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+  fd.append('action', action);
+  pks.forEach(pk => fd.append('pks', pk));
+  if (action === 'recategorize') {
+    const catId = document.getElementById('bulk-cat').value;
+    if (!catId) { alert('Select a category first'); return; }
+    fd.append('category_id', catId);
+  }
+  fetch('/expenses/bulk-action/', { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(d => {
+      if (d.success) { location.reload(); }
+      else { alert(d.error || 'Error'); }
+    });
+}
+
   document.getElementById('deleteModalBody').textContent = `Delete "${name}"? This cannot be undone.`;
   document.getElementById('deleteForm').action = `/expenses/${pk}/delete/`;
   new bootstrap.Modal(document.getElementById('deleteModal')).show();
@@ -212,5 +274,32 @@ function toggleHidden(pk, btn) {
     }
   });
 }
+function refreshBalances() {
+  const btn  = document.getElementById('refresh-balances-btn');
+  const icon = document.getElementById('refresh-icon');
+  btn.disabled = true;
+  icon.className = 'bi bi-arrow-clockwise spin';
+  fetch('/api/balances/')
+    .then(r => r.json())
+    .then(data => {
+      const bar = document.getElementById('balance-bar');
+      bar.innerHTML = data.balances.map(b => {
+        const symbol = b.currency === 'PHP' ? '₱' : b.currency + ' ';
+        const fmt = Math.round(b.balance).toLocaleString();
+        return `<div class="px-3 py-1 rounded-pill small fw-semibold"
+          style="background:${b.color}20;border:1px solid ${b.color}44;color:${b.color}">
+          ${b.name}: ${symbol}${fmt}
+        </div>`;
+      }).join('');
+    })
+    .finally(() => {
+      btn.disabled = false;
+      icon.className = 'bi bi-arrow-clockwise';
+    });
+}
 </script>
+<style>
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { display:inline-block; animation: spin .7s linear infinite; }
+</style>
 {% endblock %}

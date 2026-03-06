@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Audit Log{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-clock-history me-2" style="color:#94a3b8"></i>Audit Log</h1>
+  {% if txn_filter %}<a href="{% url 'audit_log' %}" class="btn btn-sm btn-outline-secondary">Show All</a>{% endif %}
+</div>
+{% if messages %}{% for msg in messages %}
+<div class="alert alert-{% if msg.tags == 'error' %}danger{% else %}success{% endif %} alert-dismissible">
+  {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>{% endfor %}{% endif %}
+<div class="card">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0 small">
+        <thead><tr>
+          <th>Timestamp</th><th>Action</th><th>Transaction</th><th>By</th><th>Changes</th>
+        </tr></thead>
+        <tbody>
+          {% for log in logs %}
+          <tr>
+            <td class="text-muted text-nowrap">{{ log.timestamp|date:"Y-m-d H:i" }}</td>
+            <td>
+              <span class="badge {% if log.action == 'created' %}bg-success{% elif log.action == 'updated' %}bg-info{% else %}bg-danger{% endif %}">
+                {{ log.action }}
+              </span>
+            </td>
+            <td>
+              <div class="fw-semibold">{{ log.transaction_name }}</div>
+              <div class="text-muted" style="font-size:.7rem">#{{ log.transaction_id }}</div>
+            </td>
+            <td>{{ log.user.username|default:"system" }}</td>
+            <td>
+              {% with changes=log.get_changes %}
+              {% if changes %}
+                {% for field, diff in changes.items %}
+                <div class="text-muted" style="font-size:.75rem">
+                  <span class="fw-semibold">{{ field }}:</span>
+                  <span class="text-danger text-decoration-line-through">{{ diff.from }}</span>
+                  → <span class="text-success">{{ diff.to }}</span>
+                </div>
+                {% endfor %}
+              {% else %}—{% endif %}
+              {% endwith %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="5" class="text-center text-muted py-5">
+            <i class="bi bi-clock-history display-4 d-block mb-2 opacity-25"></i>No audit entries yet
+          </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% if logs.has_other_pages %}
+  <div class="card-footer border-0">
+    <nav><ul class="pagination pagination-sm mb-0 justify-content-center">
+      {% if logs.has_previous %}<li class="page-item"><a class="page-link" href="?page={{ logs.previous_page_number }}">‹</a></li>{% endif %}
+      <li class="page-item active"><span class="page-link">{{ logs.number }} / {{ logs.paginator.num_pages }}</span></li>
+      {% if logs.has_next %}<li class="page-item"><a class="page-link" href="?page={{ logs.next_page_number }}">›</a></li>{% endif %}
+    </ul></nav>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

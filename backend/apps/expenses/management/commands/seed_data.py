@@ -12,6 +12,7 @@ class Command(BaseCommand):
             {'name': 'Transportation', 'color': '#0d6efd', 'icon': 'car-front',  'order': 2},
             {'name': 'General',        'color': '#6c757d', 'icon': 'bag',        'order': 3},
             {'name': 'Income',         'color': '#198754', 'icon': 'cash-stack', 'order': 4},
+            {'name': 'Discount',       'color': '#4ade80', 'icon': 'tag',        'order': 5},
         ]
         for d in categories:
             Category.objects.get_or_create(name=d['name'], defaults=d)
@@ -32,8 +33,8 @@ class Command(BaseCommand):
         for d in payment_methods:
             obj, created = PaymentMethod.objects.get_or_create(name=d['name'], defaults=d)
             if not created:
-                for k, v in d.items():
-                    setattr(obj, k, v)
+                obj.color = d['color']
+                obj.order = d['order']
                 obj.save()
             self.stdout.write(f"Payment Method: {d['name']} ({d['currency']})")
 

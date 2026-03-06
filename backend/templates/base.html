@@ -202,10 +202,32 @@
     <a href="{% url 'recurring_list' %}" class="nav-link {% if 'recurring' in request.resolver_match.url_name %}active{% endif %}">
       <i class="bi bi-arrow-repeat"></i> Recurring
     </a>
+    <a href="{% url 'ph_withdrawal' %}" class="nav-link {% if request.resolver_match.url_name == 'ph_withdrawal' %}active{% endif %}" style="color:#fbbf24">
+      <i class="bi bi-bank"></i> PH Withdrawal
+    </a>
+    <a href="{% url 'tw_withdrawal' %}" class="nav-link {% if request.resolver_match.url_name == 'tw_withdrawal' %}active{% endif %}" style="color:#4ade80">
+      <i class="bi bi-bank2"></i> TW Withdrawal
+    </a>
+
     <div class="nav-section">Access</div>
     <a href="{% url 'members_list' %}" class="nav-link {% if 'member' in request.resolver_match.url_name %}active{% endif %}">
       <i class="bi bi-people-fill"></i> Members
     </a>
+    <a href="{% url 'backup_list' %}" class="nav-link {% if 'backup' in request.resolver_match.url_name %}active{% endif %}" style="color:#a78bfa">
+      <i class="bi bi-shield-check-fill"></i> Backup & Restore
+    </a>
+    <div class="nav-section">Tools</div>
+    <a href="{% url 'template_list' %}" class="nav-link {% if 'template' in request.resolver_match.url_name %}active{% endif %}" style="color:#f472b6">
+      <i class="bi bi-lightning-fill"></i> Quick Templates
+    </a>
+    <a href="{% url 'shared_expense_list' %}" class="nav-link {% if 'shared' in request.resolver_match.url_name %}active{% endif %}" style="color:#fb923c">
+      <i class="bi bi-people"></i> Shared Expenses
+    </a>
+    {% if request.user.is_admin_user %}
+    <a href="{% url 'audit_log' %}" class="nav-link {% if request.resolver_match.url_name == 'audit_log' %}active{% endif %}" style="color:#94a3b8">
+      <i class="bi bi-clock-history"></i> Audit Log
+    </a>
+    {% endif %}
     {% endif %}
   </div>
   <div class="sidebar-footer">
@@ -261,7 +283,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
 <script>
-  // Dark/Light mode
+  // Dark/Light mode — saves to DB for logged-in users
   function toggleTheme() {
     const html = document.documentElement;
     const current = html.getAttribute('data-bs-theme');
@@ -270,11 +292,18 @@
     localStorage.setItem('theme', next);
     document.getElementById('themeIcon').className =
       next === 'dark' ? 'bi bi-moon-stars-fill' : 'bi bi-sun-fill';
+    // Persist to DB
+    const fd = new FormData();
+    fd.append('theme', next);
+    fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+    fetch('/preferences/save/', { method: 'POST', body: fd }).catch(() => {});
   }
 
-  // Restore theme
-  const savedTheme = localStorage.getItem('theme') || 'dark';
+  // Restore theme — DB preference takes priority over localStorage
+  const serverTheme = '{{ request.user.preference.theme|default:"" }}';
+  const savedTheme  = serverTheme || localStorage.getItem('theme') || 'dark';
   document.documentElement.setAttribute('data-bs-theme', savedTheme);
+  localStorage.setItem('theme', savedTheme);
   document.getElementById('themeIcon').className =
     savedTheme === 'dark' ? 'bi bi-moon-stars-fill' : 'bi bi-sun-fill';
 
