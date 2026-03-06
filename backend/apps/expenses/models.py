@@ -135,6 +135,7 @@ class Transaction(models.Model):
         related_name='transactions', null=True, blank=True
     )
     notes = models.TextField(blank=True, default='')
+    discount_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     is_hidden = models.BooleanField(default=False)
     is_recurring_instance = models.BooleanField(default=False)
     # For PH/TW withdrawals: exchange rate used and converted amount received
